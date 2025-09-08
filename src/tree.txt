@@ -4,6 +4,7 @@
 │   │   └── init.luau
 │   └── source
 │       ├── data_types
+│       │   └── _TemplateDataType.luau
 │       └── init.luau
 ├── _monetisation
 │   ├── resolver
@@ -15,20 +16,20 @@
 │   └── _TemplateSystem
 │       ├── client
 │       │   ├── components
-│       │   │   └── _TemplateComponent.luau
+│       │   │   └── _TemplateComponent2.luau
 │       │   ├── controllers
-│       │   │   └── _TemplateController.luau
+│       │   │   └── _TemplateController2.luau
 │       │   └── utils
-│       │       └── _TemplateUtil.luau
+│       │       └── _TemplateUtil2.luau
 │       ├── server
 │       │   ├── packages
-│       │   │   └── _TemplatePackage.luau
+│       │   │   └── _TemplatePackage2.luau
 │       │   └── services
-│       │       └── _TemplateService.luau
+│       │       └── _TemplateService2.luau
 │       └── shared
 │           ├── assets
 │           └── config
-│               └── _TemplateConfig.luau
+│               └── _TemplateConfig2.luau
 ├── _types
 │   └── init.luau
 ├── client
@@ -47,13 +48,14 @@
 │   └── services
 │       ├── _TemplateService.luau
 │       └── init.luau
-└── shared
-    ├── assets
-    ├── config
-    │   ├── _TemplateConfig.luau
-    │   └── init.luau
-    └── packages
-        ├── _TemplatePackage.luau
-        └── init.luau
+├── shared
+│   ├── assets
+│   ├── config
+│   │   ├── _TemplateConfig.luau
+│   │   └── init.luau
+│   └── packages
+│       ├── _TemplatePackage.luau
+│       └── init.luau
+└── tree.txt
 
-32 directories, 25 files
+32 directories, 27 files
