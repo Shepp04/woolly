@@ -2,83 +2,103 @@
 const fs = require("fs");
 const path = require("path");
 
-const BASE_PATH = path.join(__dirname, "../src");
-const SRC_SHARED = path.join(BASE_PATH, "shared");
-const SRC_SERVER = path.join(BASE_PATH, "server");
-const SRC_CLIENT = path.join(BASE_PATH, "client");
+// ==== Paths ====
+const BASE = path.join(__dirname, "../src");
+const SRC_SHARED = path.join(BASE, "shared");
+const SRC_SERVER = path.join(BASE, "server");
+const SRC_CLIENT = path.join(BASE, "client");
 
-const BLACKLISTED_DIRS = []; // add any absolute POSIX paths here if needed
-const initClaimedFolders = new Set(); // folders claimed by init.luau
+const SYS_ROOT  = path.join(BASE, "_systems");
+const GD_ROOT   = path.join(BASE, "_game_data");
+const MON_ROOT  = path.join(BASE, "_monetisation");
+const TYPES_ROOT= path.join(BASE, "_types");
 
+// ==== Utils ====
 const toPosix = (p) => p.split(path.sep).join("/");
-const exists = (p) => fs.existsSync(p);
-const isDir = (p) => exists(p) && fs.statSync(p).isDirectory();
-const isFile = (p) => exists(p) && fs.statSync(p).isFile();
+const exists  = (p) => fs.existsSync(p);
+const stat    = (p) => exists(p) ? fs.statSync(p) : null;
+const isDir   = (p) => !!(stat(p) && stat(p).isDirectory());
+const isFile  = (p) => !!(stat(p) && stat(p).isFile());
 
-function ensureFolderNode(parent, key) {
+const LU = (name) => name.endsWith(".luau") || name.endsWith(".lua");
+const stripExt = (n) => n.replace(/\.(luau|lua)$/i, "");
+const toPascal = (s) =>
+  s.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase()+w.slice(1)).join("");
+
+// Ensure & get folder node
+function ensureFolder(parent, key) {
   if (!parent[key]) parent[key] = { $className: "Folder" };
   return parent[key];
 }
 
-function addFileNode(parent, name, filePath, className /* optional */) {
+// Add file node; className optional (Script / LocalScript)
+function addFile(parent, nodeName, absPath, className /* optional */) {
+  const rel = toPosix(path.relative(process.cwd(), absPath));
   if (className) {
-    parent[name] = { $className: className, $path: toPosix(filePath) };
+    parent[nodeName] = { $className: className, $path: rel };
   } else {
-    parent[name] = { $path: toPosix(filePath) }; // Rojo infers ModuleScript
+    parent[nodeName] = { $path: rel }; // ModuleScript inferred for .lua/.luau
   }
 }
 
-function toPascalCase(s) {
-  if (!s) return s;
-  return s
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join("");
+// Add a folder-backed ModuleScript node (directory must contain init.luau or init.lua)
+function addFolderModule(parent, nodeName, absDir) {
+  const hasInit = isFile(path.join(absDir, "init.luau")) || isFile(path.join(absDir, "init.lua"));
+  if (!hasInit) return; // must contain init
+
+  const relDir = toPosix(path.relative(process.cwd(), absDir));
+  parent[nodeName] = { $path: relDir }; // Rojo infers ModuleScript; allows children
 }
 
-function walk(dir, cb) {
-  const posixDir = toPosix(dir);
-  if (BLACKLISTED_DIRS.includes(posixDir)) return;
-
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
+// Copy all files (recursively) from `srcDir` into `destParent` (creating PascalCase folders)
+function mirrorFolderAsModules(destParent, srcDir) {
+  if (!isDir(srcDir)) return;
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const full = path.join(srcDir, entry.name);
     if (entry.isDirectory()) {
-      walk(full, cb);
-    } else if (entry.isFile() && (entry.name.endsWith(".luau") || entry.name.endsWith(".lua"))) {
-      cb(full);
+      const node = ensureFolder(destParent, toPascal(entry.name));
+      mirrorFolderAsModules(node, full);
+    } else if (entry.isFile() && LU(entry.name)) {
+      addFile(destParent, stripExt(entry.name), full);
     }
   }
 }
 
-// -------------------- Desired static skeleton --------------------
+// Merge a system leaf folder (controllers/components/utils/services/packages/config) into a dest folderish node
+// Flat merge by names; errors on collisions.
+function mergeSystemLeaf(destParent, leafAbs) {
+  if (!isDir(leafAbs)) return;
+  for (const entry of fs.readdirSync(leafAbs, { withFileTypes: true })) {
+    const full = path.join(leafAbs, entry.name);
+    if (entry.isDirectory()) {
+      const node = ensureFolder(destParent, toPascal(entry.name));
+      mergeSystemLeaf(node, full); // recurse
+    } else if (entry.isFile() && LU(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      if (destParent[nodeName]) {
+        throw new Error(`[gen] Name collision while merging systems: ${nodeName} already exists in destination`);
+      }
+      addFile(destParent, nodeName, full);
+    }
+  }
+}
 
+// ==== Base skeleton ====
 const tree = {
-  name: "farlands",
+  name: "woolly",
   tree: {
     $className: "DataModel",
 
     ReplicatedStorage: {
       Shared: {
         $className: "Folder",
-        // We'll inject:
-        //  - Packages (ModuleScript + children)
-        //  - GameData (ModuleScript)
-        //  - Types (ModuleScript)
-        //  - Config (ModuleScript)
       },
-      Packages: { $path: "Packages" } // Wally/vendor only
+      Packages: { $path: "Packages" } // vendor (Wally) only
     },
 
     ServerScriptService: {
       Server: {
         $className: "Folder",
-        // We'll inject:
-        //  - Bootstrap (Script)
-        //  - Services (ModuleScript + children)
-        //  - Packages (ModuleScript + children)
-        //  - GameDataMaster (ModuleScript)
-        //  - DataTypes (Folder) + children
       }
     },
 
@@ -87,13 +107,8 @@ const tree = {
         Client: {
           $className: "Folder",
           Controllers: { $className: "Folder" },
-          Components: { $className: "Folder" },
-          Utils: { $className: "Folder" }
-          // We'll inject:
-          //  - Bootstrap (LocalScript)
-          //  - Controllers/*  (ModuleScripts)
-          //  - Components/*   (ModuleScripts)
-          //  - Utils/*        (ModuleScripts)
+          Components:  { $className: "Folder" },
+          Utils:       { $className: "Folder" },
         }
       }
     }
@@ -103,145 +118,101 @@ const tree = {
 const sharedRoot = tree.tree.ReplicatedStorage.Shared;
 const serverRoot = tree.tree.ServerScriptService.Server;
 const clientRoot = tree.tree.StarterPlayer.StarterPlayerScripts.Client;
-const clientControllersRoot = clientRoot.Controllers;
-const clientComponentsRoot = clientRoot.Components;
-const clientUtilsRoot = clientRoot.Utils;
+const clientControllers = clientRoot.Controllers;
+const clientComponents  = clientRoot.Components;
+const clientUtils       = clientRoot.Utils;
 
-// -------------------- Helpers for special “registry ModuleScript with children” --------------------
-
-function mountRegistryModule(registryFileAbs, childrenDirAbs, destParent, nodeName) {
-  if (!isFile(registryFileAbs)) return;
-  // Create the registry module with children under it
-  destParent[nodeName] = { $className: "ModuleScript", $path: toPosix(registryFileAbs) };
-  const dest = destParent[nodeName];
-
-  if (isDir(childrenDirAbs)) {
-    for (const entry of fs.readdirSync(childrenDirAbs, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
-      if (!(entry.name.endsWith(".luau") || entry.name.endsWith(".lua"))) continue;
-      const childName = path.basename(entry.name).replace(/\.(luau|lua)$/, "");
-      const childPath = path.join(childrenDirAbs, entry.name);
-      // Child modules appear as ModuleScripts under the registry ModuleScript
-      addFileNode(dest, childName, childPath);
-    }
-  }
-}
-
-// -------------------- 1) Shared --------------------
-
+// ==== 1) Core shared ====
 (function buildShared() {
-  // Packages.luau (registry) + children: src/shared/Packages/*
-  mountRegistryModule(
-    path.join(SRC_SHARED, "Packages.luau"),
-    path.join(SRC_SHARED, "Packages"),
-    sharedRoot,
-    "Packages"
-  );
+  // Shared/Packages (folder-backed ModuleScript) ← src/shared/packages/
+  addFolderModule(sharedRoot, "Packages", path.join(SRC_SHARED, "packages"));
 
-  // GameData.luau / Types.luau / Config.luau (plain ModuleScripts)
-  const sharedSingles = ["GameData", "Types", "Config"];
-  for (const base of sharedSingles) {
-    const f = path.join(SRC_SHARED, `${base}.luau`);
-    if (isFile(f)) addFileNode(sharedRoot, base, f);
-  }
+  // Shared/GameData (folder-backed) ← src/_game_data/resolver/
+  addFolderModule(sharedRoot, "GameData", path.join(GD_ROOT, "resolver"));
+
+  // Shared/Types (folder-backed) ← src/_types/
+  addFolderModule(sharedRoot, "Types", TYPES_ROOT);
+
+  // Shared/Config (folder-backed) ← src/shared/config/
+  addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
+
+  // Shared/Monetisation (folder-backed) ← src/_monetisation/resolver/
+  addFolderModule(sharedRoot, "Monetisation", path.join(MON_ROOT, "resolver"));
+
+  // Shared/Assets (optional folder target for systems)
+  ensureFolder(sharedRoot, "Assets");
 })();
 
-// -------------------- 2) Server --------------------
-
+// ==== 2) Core server ====
 (function buildServer() {
   // Bootstrap.server.luau → Script
-  const bootstrap = path.join(SRC_SERVER, "Bootstrap.server.luau");
-  if (isFile(bootstrap)) addFileNode(serverRoot, "Bootstrap", bootstrap, "Script");
+  const bootSrv = path.join(SRC_SERVER, "Bootstrap.server.luau");
+  if (isFile(bootSrv)) addFile(serverRoot, "Bootstrap", bootSrv);
 
-  // Services.luau (registry) + children in src/server/Services/*
-  mountRegistryModule(
-    path.join(SRC_SERVER, "Services.luau"),
-    path.join(SRC_SERVER, "Services"),
-    serverRoot,
-    "Services"
-  );
+  // Services (folder-backed) ← src/server/services/
+  addFolderModule(serverRoot, "Services", path.join(SRC_SERVER, "services"));
 
-  // Packages.luau (registry) + children in src/server/Packages/*
-  mountRegistryModule(
-    path.join(SRC_SERVER, "Packages.luau"),
-    path.join(SRC_SERVER, "Packages"),
-    serverRoot,
-    "Packages"
-  );
+  // Packages (folder-backed) ← src/server/packages/
+  addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
 
-  // GameDataMaster.luau
-  const gdm = path.join(SRC_SERVER, "GameDataMaster.luau");
-  if (isFile(gdm)) addFileNode(serverRoot, "GameDataMaster", gdm);
+  // GameDataMaster (folder-backed) ← src/_game_data/source/
+  addFolderModule(serverRoot, "GameDataMaster", path.join(GD_ROOT, "source"));
 
-  // DataTypes folder and any ModuleScripts inside it
-  const dataTypesDir = path.join(SRC_SERVER, "DataTypes");
-  if (isDir(dataTypesDir)) {
-    const dataTypesNode = ensureFolderNode(serverRoot, "DataTypes");
-    for (const entry of fs.readdirSync(dataTypesDir, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
-      if (!(entry.name.endsWith(".luau") || entry.name.endsWith(".lua"))) continue;
-      const name = path.basename(entry.name).replace(/\.(luau|lua)$/, "");
-      addFileNode(dataTypesNode, name, path.join(dataTypesDir, entry.name));
+  // Monetisation (folder-backed) ← src/_monetisation/source/
+  addFolderModule(serverRoot, "Monetisation", path.join(MON_ROOT, "source"));
+})();
+
+// ==== 3) Core client ====
+(function buildClient() {
+  // Bootstrap.client.luau → LocalScript
+  const bootCli = path.join(SRC_CLIENT, "Bootstrap.client.luau");
+  if (isFile(bootCli)) addFile(clientRoot, "Bootstrap", bootCli);
+
+  // Controllers / Components / Utils from src/client/*
+  mirrorFolderAsModules(clientControllers, path.join(SRC_CLIENT, "controllers"));
+  mirrorFolderAsModules(clientComponents,  path.join(SRC_CLIENT, "components"));
+  mirrorFolderAsModules(clientUtils,       path.join(SRC_CLIENT, "utils"));
+})();
+
+// ==== 4) Systems merge ====
+(function mergeSystems() {
+  if (!isDir(SYS_ROOT)) return;
+
+  for (const sysName of fs.readdirSync(SYS_ROOT)) {
+    const sysDir = path.join(SYS_ROOT, sysName);
+    if (!isDir(sysDir)) continue;
+
+    // client
+    const cRoot = path.join(sysDir, "client");
+    if (isDir(cRoot)) {
+      mergeSystemLeaf(clientControllers, path.join(cRoot, "controllers"));
+      mergeSystemLeaf(clientComponents,  path.join(cRoot, "components"));
+      mergeSystemLeaf(clientUtils,       path.join(cRoot, "utils"));
+    }
+
+    // server
+    const sRoot = path.join(sysDir, "server");
+    if (isDir(sRoot)) {
+      if (!serverRoot.Services) addFolderModule(serverRoot, "Services", path.join(SRC_SERVER, "services"));
+      if (serverRoot.Services)  mergeSystemLeaf(serverRoot.Services, path.join(sRoot, "services"));
+
+      if (!serverRoot.Packages) addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
+      if (serverRoot.Packages)  mergeSystemLeaf(serverRoot.Packages, path.join(sRoot, "packages"));
+    }
+
+    // shared
+    const shRoot = path.join(sysDir, "shared");
+    if (isDir(shRoot)) {
+      // Assets: keep going to Shared/Assets
+      mirrorFolderAsModules(ensureFolder(sharedRoot, "Assets"), path.join(shRoot, "assets"));
+
+      // Config: merge directly into Shared.Config (folder-backed ModuleScript)
+      if (!sharedRoot.Config) addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
+      if (sharedRoot.Config)  mergeSystemLeaf(sharedRoot.Config, path.join(shRoot, "config"));
     }
   }
 })();
 
-// -------------------- 3) Client --------------------
-
-(function buildClient() {
-  // Bootstrap.client.luau → LocalScript
-  const bootstrap = path.join(SRC_CLIENT, "Bootstrap.client.luau");
-  if (isFile(bootstrap)) addFileNode(clientRoot, "Bootstrap", bootstrap, "LocalScript");
-
-  // Controllers / Components / Utils : recursive map of modules (with init.luau claiming)
-  const mapLeafDir = (absDir, destParent) => {
-    if (!isDir(absDir)) return;
-
-    const walkStack = [absDir];
-    while (walkStack.length) {
-      const cur = walkStack.pop();
-      for (const entry of fs.readdirSync(cur, { withFileTypes: true })) {
-        const full = path.join(cur, entry.name);
-        if (entry.isDirectory()) {
-          walkStack.push(full);
-          continue;
-        }
-        if (!(entry.isFile() && (entry.name.endsWith(".luau") || entry.name.endsWith(".lua")))) continue;
-
-        const relFromRoot = path.relative(absDir, full); // relative to Controllers/Components/Utils root
-        const relParts = relFromRoot.split(path.sep);
-        const filename = path.basename(entry.name).replace(/\.(luau|lua)$/, "");
-        const parentParts = relParts.slice(0, -1);
-
-        // init.luau promotion
-        if (filename === "init") {
-          const claimKey = toPosix(path.join(absDir, ...parentParts)); // absolute
-          if (claimKey) initClaimedFolders.add(claimKey);
-          // create folder nodes in dest
-          let node = destParent;
-          for (const p of parentParts) node = ensureFolderNode(node, toPascalCase(p));
-          // mount the folder (not the file)
-          addFileNode(node, toPascalCase(path.basename(path.dirname(full))), path.join(absDir, ...parentParts));
-          continue;
-        }
-
-        // skip if this file is inside a claimed folder
-        const folderAbs = toPosix(path.join(absDir, ...parentParts));
-        if (initClaimedFolders.has(folderAbs)) continue;
-
-        // create path and file node
-        let node = destParent;
-        for (const p of parentParts) node = ensureFolderNode(node, toPascalCase(p));
-        addFileNode(node, filename, full);
-      }
-    }
-  };
-
-  mapLeafDir(path.join(SRC_CLIENT, "Controllers"), clientControllersRoot);
-  mapLeafDir(path.join(SRC_CLIENT, "Components"), clientComponentsRoot);
-  mapLeafDir(path.join(SRC_CLIENT, "Utils"), clientUtilsRoot);
-})();
-
-// -------------------- Write file --------------------
+// ==== Write project ====
 fs.writeFileSync("default.project.json", JSON.stringify(tree, null, 2));
 console.log("✅ default.project.json generated.");
