@@ -1,0 +1,59 @@
+.
+├── _game_data
+│   ├── resolver
+│   │   └── init.luau
+│   └── source
+│       ├── data_types
+│       └── init.luau
+├── _monetisation
+│   ├── resolver
+│   │   └── init.luau
+│   └── source
+│       ├── init.luau
+│       └── ProductDefs.luau
+├── _systems
+│   └── _TemplateSystem
+│       ├── client
+│       │   ├── components
+│       │   │   └── _TemplateComponent.luau
+│       │   ├── controllers
+│       │   │   └── _TemplateController.luau
+│       │   └── utils
+│       │       └── _TemplateUtil.luau
+│       ├── server
+│       │   ├── packages
+│       │   │   └── _TemplatePackage.luau
+│       │   └── services
+│       │       └── _TemplateService.luau
+│       └── shared
+│           ├── assets
+│           └── config
+│               └── _TemplateConfig.luau
+├── _types
+│   └── init.luau
+├── client
+│   ├── Bootstrap.client.luau
+│   ├── components
+│   │   └── _TemplateComponent.luau
+│   ├── controllers
+│   │   └── _TemplateController.luau
+│   └── utils
+│       └── _TemplateUtil.luau
+├── server
+│   ├── Bootstrap.server.luau
+│   ├── packages
+│   │   ├── _TemplatePackage.luau
+│   │   └── init.luau
+│   └── services
+│       ├── _TemplateService.luau
+│       └── init.luau
+└── shared
+    ├── assets
+    ├── config
+    │   ├── _TemplateConfig.luau
+    │   └── init.luau
+    └── packages
+        ├── _TemplatePackage.luau
+        └── init.luau
+
+32 directories, 25 files
