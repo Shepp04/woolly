@@ -72,6 +72,9 @@
           "$className": "Folder",
           "Controllers": {
             "$className": "Folder",
+            "UX": {
+              "$path": "src/client/controllers/UX"
+            },
             "_TemplateController": {
               "$path": "src/client/controllers/_TemplateController.luau"
             },

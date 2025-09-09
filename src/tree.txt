@@ -1,4 +1,4 @@
-.
+src
 ├── _game_data
 │   ├── resolver
 │   │   └── init.luau
@@ -28,34 +28,56 @@
 │       │       └── _TemplateService2.luau
 │       └── shared
 │           ├── assets
+│           │   ├── models
+│           │   └── ui
 │           └── config
 │               └── _TemplateConfig2.luau
 ├── _types
-│   └── init.luau
+│   ├── Data.luau
+│   ├── init.luau
+│   └── Services.luau
 ├── client
 │   ├── Bootstrap.client.luau
 │   ├── components
 │   │   └── _TemplateComponent.luau
 │   ├── controllers
-│   │   └── _TemplateController.luau
+│   │   ├── _TemplateController.luau
+│   │   └── UX
+│   │       ├── BouncingButton.luau
+│   │       ├── ColourChange.luau
+│   │       ├── ExpandingButton.luau
+│   │       ├── init.luau
+│   │       ├── RotatingElement.luau
+│   │       └── SwingingElement.luau
 │   └── utils
 │       └── _TemplateUtil.luau
 ├── server
 │   ├── Bootstrap.server.luau
 │   ├── packages
 │   │   ├── _TemplatePackage.luau
-│   │   └── init.luau
+│   │   ├── DataManager.luau
+│   │   ├── init.luau
+│   │   └── ProfileStore.luau
 │   └── services
 │       ├── _TemplateService.luau
+│       ├── DataInterface.luau
 │       └── init.luau
 ├── shared
 │   ├── assets
+│   │   ├── models
+│   │   └── ui
+│   │       └── MonetisationOverlay.rbxmx
 │   ├── config
 │   │   ├── _TemplateConfig.luau
-│   │   └── init.luau
+│   │   ├── Data.luau
+│   │   ├── init.luau
+│   │   └── Sounds.luau
 │   └── packages
 │       ├── _TemplatePackage.luau
-│       └── init.luau
+│       ├── Bindables.luau
+│       ├── init.luau
+│       ├── Remotes.luau
+│       └── ReplicatedData.luau
 └── tree.txt
 
-32 directories, 27 files
+37 directories, 44 files

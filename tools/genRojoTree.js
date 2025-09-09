@@ -19,11 +19,20 @@ const exists  = (p) => fs.existsSync(p);
 const stat    = (p) => exists(p) ? fs.statSync(p) : null;
 const isDir   = (p) => !!(stat(p) && stat(p).isDirectory());
 const isFile  = (p) => !!(stat(p) && stat(p).isFile());
+const hasInitFile = (dir) =>
+  isFile(path.join(dir, "init.luau")) || isFile(path.join(dir, "init.lua"));
 
 const LU = (name) => name.endsWith(".luau") || name.endsWith(".lua");
 const stripExt = (n) => n.replace(/\.(luau|lua|rbxm|rbxmx)$/i, "");
-const toPascal = (s) =>
-  s.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase()+w.slice(1)).join("");
+const toPascal = (s) => {
+  // Keep all-caps words as-is (UX, UI, ID)
+  if (/^[A-Z0-9_]+$/.test(s)) return s;
+  return s
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map(w => w[0].toUpperCase() + w.slice(1))
+    .join("");
+};
 
 const isModelFile = (name) => name.endsWith(".rbxm") || name.endsWith(".rbxmx");
 
@@ -55,11 +64,26 @@ function addFolderModule(parent, nodeName, absDir) {
 // Copy all .lua/.luau (recursively) from `srcDir` into `destParent` (creating PascalCase folders)
 function mirrorFolderAsModules(destParent, srcDir) {
   if (!isDir(srcDir)) return;
+
+  // If this directory itself is a folder-backed module, mount it and stop
+  if (hasInitFile(srcDir)) {
+    const nodeName = toPascal(path.basename(srcDir));
+    addFolderModule(destParent, nodeName, srcDir);
+    return;
+  }
+
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const full = path.join(srcDir, entry.name);
     if (entry.isDirectory()) {
-      const node = ensureFolder(destParent, toPascal(entry.name));
-      mirrorFolderAsModules(node, full);
+      if (hasInitFile(full)) {
+        // Child folder is a folder-backed module
+        const nodeName = toPascal(entry.name);
+        addFolderModule(destParent, nodeName, full);
+      } else {
+        // Plain folder: recurse and mirror plain ModuleScripts inside
+        const node = ensureFolder(destParent, toPascal(entry.name));
+        mirrorFolderAsModules(node, full);
+      }
     } else if (entry.isFile() && LU(entry.name)) {
       addFile(destParent, stripExt(entry.name), full);
     }
@@ -88,11 +112,30 @@ function mirrorAssets(destParent, srcDir) {
 // Flat merge by names; errors on collisions.
 function mergeSystemLeaf(destParent, leafAbs) {
   if (!isDir(leafAbs)) return;
+
+  // If this directory itself is a folder-backed module, mount it and stop
+  if (hasInitFile(leafAbs)) {
+    const nodeName = toPascal(path.basename(leafAbs));
+    if (destParent[nodeName]) {
+      throw new Error(`[gen] Name collision while merging systems: ${nodeName} already exists in destination`);
+    }
+    addFolderModule(destParent, nodeName, leafAbs);
+    return;
+  }
+
   for (const entry of fs.readdirSync(leafAbs, { withFileTypes: true })) {
     const full = path.join(leafAbs, entry.name);
     if (entry.isDirectory()) {
-      const node = ensureFolder(destParent, toPascal(entry.name));
-      mergeSystemLeaf(node, full); // recurse
+      if (hasInitFile(full)) {
+        const nodeName = toPascal(entry.name);
+        if (destParent[nodeName]) {
+          throw new Error(`[gen] Name collision while merging systems: ${nodeName} already exists in destination`);
+        }
+        addFolderModule(destParent, nodeName, full);
+      } else {
+        const node = ensureFolder(destParent, toPascal(entry.name));
+        mergeSystemLeaf(node, full);
+      }
     } else if (entry.isFile() && LU(entry.name)) {
       const nodeName = stripExt(entry.name);
       if (destParent[nodeName]) {
