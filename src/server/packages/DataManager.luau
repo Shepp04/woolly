@@ -20,11 +20,11 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local Types = require(ReplicatedStorage.Shared.Types.Data)
 
 --// Templates
-local PROFILE_TEMPLATE = Config.PROFILE_TEMPLATE or {}
-local INFO_TEMPLATE = Config.INFO_TEMPLATE or {}
+local DATA_TEMPLATE = Config.Data.dataTemplate or {}
+local INFO_TEMPLATE = Config.Data.infoTemplate or {}
 
 -- // ProfileStore Setup
-local PlayerStore = ProfileStore.New("PlayerStore", PROFILE_TEMPLATE)
+local PlayerStore = ProfileStore.New("PlayerStore", DATA_TEMPLATE)
 local Profiles: { [Player]: Types.PlayerProfile } = {}
 
 --// Module
