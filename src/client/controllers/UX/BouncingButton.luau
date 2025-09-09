@@ -5,7 +5,7 @@ local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 
 --// Constants
-local TAG = "HoveringButton"
+local TAG = "BouncingButton"
 local APPLIED_TAG = TAG .. "_Applied"
 
 --// Types
