@@ -50,7 +50,7 @@ local function initialise()
 			BindablesFolder = folder
 		end
 	else
-		BindablesFolder = ReplicatedStorage:WaitForChild("Bindables")
+		BindablesFolder = ReplicatedStorage:FindFirstChild("Bindables")
 		if not (BindablesFolder) then
 			local folder = Instance.new("Folder")
 			folder.Parent = ReplicatedStorage
