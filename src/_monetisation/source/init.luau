@@ -9,19 +9,24 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- // Datastores
-local PurchaseHistoryStore = DataStoreService:GetDataStore("PurchaseHistory")
+local PurchaseHistoryStore
+if game.PlaceVersion ~= 0 then
+	PurchaseHistoryStore = DataStoreService:GetDataStore("PurchaseHistory")
+else
+	warn(`[MonetisationService] Please publish this place to use MonetisationService fully!`)
+end
 
 -- // Data (server-only SSOT)
 local ProductDefs = require(script.ProductDefs)
 
 -- // Packages (shared replication)
 local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
-local ReplicatedData = Packages.ReplicatedData
 
 -- // Types
 export type Deps = {
 	-- Optional facade for rewarding currency, etc.
 	DataInterface: any?,
+	ReplicatedData: any?,
 }
 
 export type ReceiptInfo = {
@@ -113,7 +118,9 @@ end
 --[[ Publish the catalog snapshot to ReplicatedData ]]
 function MonetisationService:Republish()
 	local snapshot = buildSnapshot()
-	ReplicatedData:SetData(SNAPSHOT_KEY, snapshot)
+	if _deps and _deps.ReplicatedData then
+		_deps.ReplicatedData:SetData(SNAPSHOT_KEY, snapshot)
+	end
 end
 
 -- ========== Internal ========== --
