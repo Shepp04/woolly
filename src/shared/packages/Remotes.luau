@@ -47,7 +47,7 @@ local function initialise()
 			RemotesFolder = folder
 		end
 	else
-		RemotesFolder = ReplicatedStorage:WaitForChild("Remotes")
+		RemotesFolder = ReplicatedStorage:WaitForChild("Remotes", 5.0)
 	end
 end
 
