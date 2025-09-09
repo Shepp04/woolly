@@ -64,6 +64,9 @@ end
 
 -- Initializes a player profile when loaded
 local function onProfileLoad(player: Player, profile: Types.PlayerProfile)
+	-- Reconcile all sections into data
+	DataManager:ReconcileAllSections(player, profile)
+
 	-- Initialise Info
 	profile.Info = deepClone(INFO_TEMPLATE)
 
@@ -79,9 +82,6 @@ local function onProfileLoad(player: Player, profile: Types.PlayerProfile)
 
 	-- Save join time locally for playtime calc
 	profile.Info.JoinTime = os.time()
-
-	-- Reconcile all sections into data
-	DataManager:ReconcileAllSections(player, profile)
 
 	ReplicatedData:SetData("PlayerData", profile.Data, { player })
 	ReplicatedData:SetData("PlayerInfo", profile.Info, { player })
@@ -321,6 +321,16 @@ function DataManager:GetPlayerProfilePromise(player: Player): typeof(Promise.res
 			return reject("Profile never loaded.")
 		end
 	end)
+end
+
+function DataManager:Init()
+	-- Register required sections
+	self:RegisterReconcileSection("Data", "Analytics", {
+		TotalLogins = 0,
+		TotalPlaytime = 0,
+		LastLeaveTime = nil,
+		InitialJoinTime = nil,
+	})
 end
 
 return DataManager

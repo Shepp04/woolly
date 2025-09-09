@@ -9,7 +9,7 @@ local ServicesFolder = script
 
 -- Generic service type
 export type Service = {
-    Priority: number?,
+    Priority: number?, -- lowest first
     Init: (self: Service, deps: any) -> (),
     Start: (self: Service) -> (),
     Destroy: (self: Service) -> (),
