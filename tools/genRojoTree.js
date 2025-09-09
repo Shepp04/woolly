@@ -93,7 +93,7 @@ const tree = {
       Shared: {
         $className: "Folder",
       },
-      Packages: { $path: "Packages" } // vendor (Wally) only
+      ExternalPackages: { $path: "Packages" } // vendor (Wally) only
     },
 
     ServerScriptService: {
