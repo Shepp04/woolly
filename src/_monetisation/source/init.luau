@@ -42,6 +42,8 @@ export type MonetisationService = {
 	_started: boolean,
 	_conns: { RBXScriptConnection },
 
+	_version: string,
+
 	Init: (self: MonetisationService, deps: Deps) -> (),
 	Start: (self: MonetisationService) -> (),
 	Destroy: (self: MonetisationService) -> (),
@@ -119,7 +121,17 @@ end
 function MonetisationService:Republish()
 	local snapshot = buildSnapshot()
 	if _deps and _deps.ReplicatedData then
-		_deps.ReplicatedData:SetData(SNAPSHOT_KEY, snapshot)
+		if _deps.ReplicatedData.RegisterStatic then
+			_deps.ReplicatedData:RegisterStatic("MonetisationData", snapshot)
+			if _deps.ReplicatedData.UpdateStatic then
+				_deps.ReplicatedData:UpdateStatic("MonetisationData", snapshot)
+			else
+				_deps.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
+			end
+		else
+			_deps.ReplicatedData:SetData("MonetisationData", snapshot)
+			_deps.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
+		end
 	end
 end
 
@@ -147,10 +159,10 @@ end
 
 --[[ Roblox ProcessReceipt for DevProducts (idempotent via PurchaseHistoryStore) ]]
 function MonetisationService:_processReceipt(receiptInfo: ReceiptInfo): Enum.ProductPurchaseDecision
-	print("[Monetisation] Receipt:", receiptInfo.PlayerId, receiptInfo.ProductId, receiptInfo.PurchaseId)
+	-- print("[Monetisation] Receipt:", receiptInfo.PlayerId, receiptInfo.ProductId, receiptInfo.PurchaseId)
 
 	local key = (`{receiptInfo.PlayerId}_{receiptInfo.PurchaseId}`)
-
+	
 	-- Idempotency check
 	local seen: boolean? = nil
 	local okGet, errGet = pcall(function()
@@ -239,6 +251,8 @@ function MonetisationService:Init(deps: Deps)
 
 	_deps = deps
 	self._conns = {}
+
+	self._version = tostring(os.time()) -- swap to a content hash later if desired
 
 	-- Build & publish the public catalog now
 	self:Republish()

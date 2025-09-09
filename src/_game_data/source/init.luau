@@ -4,7 +4,7 @@
 -- Usage (once at server boot):
 --   local GameDataMaster = require(path.to.GameDataMaster):Init() -- auto-publishes
 -- Or:
---   require(...):Init({ container = script:WaitForChild("DataTypes"), autoPublish = true })
+--   require(...):Init({ container = script:WaitForChild("data_types"), autoPublish = true })
 
 -- // Services
 local RunService = game:GetService("RunService")
@@ -184,7 +184,7 @@ end
 	sets a version string, and (by default) publishes to clients.
 
 	@param opts? { container: Instance?, autoPublish: boolean? }
-	        container    — Folder containing DataType modules. Defaults to script:WaitForChild("DataTypes")
+	        container    — Folder containing DataType modules. Defaults to script:WaitForChild("data_types")
 	        autoPublish  — If true (default), calls :PublishStatic() after ingest.
 
 	@return GameDataMaster (module table)
@@ -195,7 +195,7 @@ function GameDataMaster:Init(opts: { container: Instance?, autoPublish: boolean?
 	end
 	self._inited = true
 
-	local container = (opts and opts.container) or script:WaitForChild("DataTypes")
+	local container = (opts and opts.container) or script:WaitForChild("data_types")
 	self._privateByType = {}
 	self._publicByType  = {}
 	self._version = tostring(os.time()) -- swap to a content hash later if desired

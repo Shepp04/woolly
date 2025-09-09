@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- ========== Packages ========== --
 local SharedPackages = require(ReplicatedStorage.Shared.Packages)
-local ExternalPackages = ReplicatedStorage.Packages
+local ExternalPackages = ReplicatedStorage.ExternalPackages
 
 -- ========== Game Data ========== --
 local GameData = require(ReplicatedStorage.Shared.GameData)

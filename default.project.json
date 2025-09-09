@@ -24,10 +24,19 @@
           "$path": "src/_monetisation/resolver"
         },
         "Assets": {
-          "$className": "Folder"
+          "$className": "Folder",
+          "UI": {
+            "$className": "Folder",
+            "MonetisationOverlay": {
+              "$path": "src/shared/assets/ui/MonetisationOverlay.rbxmx"
+            }
+          },
+          "Models": {
+            "$className": "Folder"
+          }
         }
       },
-      "Packages": {
+      "ExternalPackages": {
         "$path": "Packages"
       }
     },

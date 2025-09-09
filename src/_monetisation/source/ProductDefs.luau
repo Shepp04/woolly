@@ -42,6 +42,7 @@ local Handlers: { devProducts: { [string]: Handler }, gamepasses: { [string]: Ha
 
 Handlers.devProducts.CurrencyDevProduct = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
 	-- TODO: Grant currency etc.
+	print("Granted")
 	return true
 end
 
@@ -56,7 +57,7 @@ ProductDefs.public_field_blacklist = { handler = true }
 ProductDefs.items = { devProducts = {}, gamepasses = {} }
 
 ProductDefs.items.devProducts.DevProduct01 = {
-	id = 12345678,
+	id = 1151725677,
 	name = "Dev Product 01",
 	category = "Currency",
 	description = nil, -- hydrated later
