@@ -51,7 +51,8 @@ if RunService:IsServer() then
 
 else
 	-- Client reads the replicated static blob via your ReplicatedData
-	local ReplicatedData = require(script.Parent:WaitForChild("ReplicatedData"))
+	local SharedPackages = require(ReplicatedStorage.Shared.Packages)
+	local ReplicatedData = SharedPackages.ReplicatedData
 	local CATEGORY = "GameData"
 
 	local function getBlob(yieldForIt: boolean?): { version: string, data: { [string]: { [string]: any } } }?

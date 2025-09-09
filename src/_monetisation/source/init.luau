@@ -9,19 +9,24 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- // Datastores
-local PurchaseHistoryStore = DataStoreService:GetDataStore("PurchaseHistory")
+local PurchaseHistoryStore
+if game.PlaceVersion ~= 0 then
+	PurchaseHistoryStore = DataStoreService:GetDataStore("PurchaseHistory")
+else
+	warn(`[MonetisationService] Please publish this place to use MonetisationService fully!`)
+end
 
 -- // Data (server-only SSOT)
 local ProductDefs = require(script.ProductDefs)
 
 -- // Packages (shared replication)
 local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
-local ReplicatedData = Packages.ReplicatedData
 
 -- // Types
 export type Deps = {
 	-- Optional facade for rewarding currency, etc.
 	DataInterface: any?,
+	ReplicatedData: any?,
 }
 
 export type ReceiptInfo = {
@@ -36,6 +41,8 @@ export type MonetisationService = {
 	_inited: boolean,
 	_started: boolean,
 	_conns: { RBXScriptConnection },
+
+	_version: string,
 
 	Init: (self: MonetisationService, deps: Deps) -> (),
 	Start: (self: MonetisationService) -> (),
@@ -113,7 +120,19 @@ end
 --[[ Publish the catalog snapshot to ReplicatedData ]]
 function MonetisationService:Republish()
 	local snapshot = buildSnapshot()
-	ReplicatedData:SetData(SNAPSHOT_KEY, snapshot)
+	if _deps and _deps.ReplicatedData then
+		if _deps.ReplicatedData.RegisterStatic then
+			_deps.ReplicatedData:RegisterStatic("MonetisationData", snapshot)
+			if _deps.ReplicatedData.UpdateStatic then
+				_deps.ReplicatedData:UpdateStatic("MonetisationData", snapshot)
+			else
+				_deps.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
+			end
+		else
+			_deps.ReplicatedData:SetData("MonetisationData", snapshot)
+			_deps.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
+		end
+	end
 end
 
 -- ========== Internal ========== --
@@ -140,10 +159,10 @@ end
 
 --[[ Roblox ProcessReceipt for DevProducts (idempotent via PurchaseHistoryStore) ]]
 function MonetisationService:_processReceipt(receiptInfo: ReceiptInfo): Enum.ProductPurchaseDecision
-	print("[Monetisation] Receipt:", receiptInfo.PlayerId, receiptInfo.ProductId, receiptInfo.PurchaseId)
+	-- print("[Monetisation] Receipt:", receiptInfo.PlayerId, receiptInfo.ProductId, receiptInfo.PurchaseId)
 
 	local key = (`{receiptInfo.PlayerId}_{receiptInfo.PurchaseId}`)
-
+	
 	-- Idempotency check
 	local seen: boolean? = nil
 	local okGet, errGet = pcall(function()
@@ -232,6 +251,8 @@ function MonetisationService:Init(deps: Deps)
 
 	_deps = deps
 	self._conns = {}
+
+	self._version = tostring(os.time()) -- swap to a content hash later if desired
 
 	-- Build & publish the public catalog now
 	self:Republish()

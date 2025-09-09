@@ -21,9 +21,11 @@ const isDir   = (p) => !!(stat(p) && stat(p).isDirectory());
 const isFile  = (p) => !!(stat(p) && stat(p).isFile());
 
 const LU = (name) => name.endsWith(".luau") || name.endsWith(".lua");
-const stripExt = (n) => n.replace(/\.(luau|lua)$/i, "");
+const stripExt = (n) => n.replace(/\.(luau|lua|rbxm|rbxmx)$/i, "");
 const toPascal = (s) =>
   s.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase()+w.slice(1)).join("");
+
+const isModelFile = (name) => name.endsWith(".rbxm") || name.endsWith(".rbxmx");
 
 // Ensure & get folder node
 function ensureFolder(parent, key) {
@@ -37,7 +39,7 @@ function addFile(parent, nodeName, absPath, className /* optional */) {
   if (className) {
     parent[nodeName] = { $className: className, $path: rel };
   } else {
-    parent[nodeName] = { $path: rel }; // ModuleScript inferred for .lua/.luau
+    parent[nodeName] = { $path: rel }; // ModuleScript inferred for .lua/.luau; models mapped as Models
   }
 }
 
@@ -50,7 +52,7 @@ function addFolderModule(parent, nodeName, absDir) {
   parent[nodeName] = { $path: relDir }; // Rojo infers ModuleScript; allows children
 }
 
-// Copy all files (recursively) from `srcDir` into `destParent` (creating PascalCase folders)
+// Copy all .lua/.luau (recursively) from `srcDir` into `destParent` (creating PascalCase folders)
 function mirrorFolderAsModules(destParent, srcDir) {
   if (!isDir(srcDir)) return;
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
@@ -60,6 +62,24 @@ function mirrorFolderAsModules(destParent, srcDir) {
       mirrorFolderAsModules(node, full);
     } else if (entry.isFile() && LU(entry.name)) {
       addFile(destParent, stripExt(entry.name), full);
+    }
+  }
+}
+
+// NEW: Copy all .rbxm/.rbxmx (recursively) from `srcDir` into `destParent`
+function mirrorAssets(destParent, srcDir) {
+  if (!isDir(srcDir)) return;
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const full = path.join(srcDir, entry.name);
+    if (entry.isDirectory()) {
+      const node = ensureFolder(destParent, toPascal(entry.name));
+      mirrorAssets(node, full);
+    } else if (entry.isFile() && isModelFile(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      if (destParent[nodeName]) {
+        throw new Error(`[gen] Asset name collision: ${nodeName} already exists in destination`);
+      }
+      addFile(destParent, nodeName, full);
     }
   }
 }
@@ -93,7 +113,8 @@ const tree = {
       Shared: {
         $className: "Folder",
       },
-      Packages: { $path: "Packages" } // vendor (Wally) only
+    //  ExternalPackages/Wally: map if you need it here instead
+      ExternalPackages: { $path: "Packages" }
     },
 
     ServerScriptService: {
@@ -139,36 +160,31 @@ const clientUtils       = clientRoot.Utils;
   // Shared/Monetisation (folder-backed) ← src/_monetisation/resolver/
   addFolderModule(sharedRoot, "Monetisation", path.join(MON_ROOT, "resolver"));
 
-  // Shared/Assets (optional folder target for systems)
-  ensureFolder(sharedRoot, "Assets");
+  // Shared/Assets/UI + Models
+  const assetsFolder = ensureFolder(sharedRoot, "Assets");
+  const assetsUI = ensureFolder(assetsFolder, "UI");
+  const assetsModels = ensureFolder(assetsFolder, "Models");
+
+  mirrorAssets(assetsUI,     path.join(SRC_SHARED, "assets", "ui"));
+  mirrorAssets(assetsModels, path.join(SRC_SHARED, "assets", "models"));
 })();
 
 // ==== 2) Core server ====
 (function buildServer() {
-  // Bootstrap.server.luau → Script
   const bootSrv = path.join(SRC_SERVER, "Bootstrap.server.luau");
   if (isFile(bootSrv)) addFile(serverRoot, "Bootstrap", bootSrv);
 
-  // Services (folder-backed) ← src/server/services/
   addFolderModule(serverRoot, "Services", path.join(SRC_SERVER, "services"));
-
-  // Packages (folder-backed) ← src/server/packages/
   addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
-
-  // GameDataMaster (folder-backed) ← src/_game_data/source/
   addFolderModule(serverRoot, "GameDataMaster", path.join(GD_ROOT, "source"));
-
-  // Monetisation (folder-backed) ← src/_monetisation/source/
   addFolderModule(serverRoot, "Monetisation", path.join(MON_ROOT, "source"));
 })();
 
 // ==== 3) Core client ====
 (function buildClient() {
-  // Bootstrap.client.luau → LocalScript
   const bootCli = path.join(SRC_CLIENT, "Bootstrap.client.luau");
   if (isFile(bootCli)) addFile(clientRoot, "Bootstrap", bootCli);
 
-  // Controllers / Components / Utils from src/client/*
   mirrorFolderAsModules(clientControllers, path.join(SRC_CLIENT, "controllers"));
   mirrorFolderAsModules(clientComponents,  path.join(SRC_CLIENT, "components"));
   mirrorFolderAsModules(clientUtils,       path.join(SRC_CLIENT, "utils"));
@@ -177,6 +193,11 @@ const clientUtils       = clientRoot.Utils;
 // ==== 4) Systems merge ====
 (function mergeSystems() {
   if (!isDir(SYS_ROOT)) return;
+
+  // Prepare shared assets nodes once
+  const assetsFolder = ensureFolder(sharedRoot, "Assets");
+  const assetsUI = ensureFolder(assetsFolder, "UI");
+  const assetsModels = ensureFolder(assetsFolder, "Models");
 
   for (const sysName of fs.readdirSync(SYS_ROOT)) {
     const sysDir = path.join(SYS_ROOT, sysName);
@@ -200,13 +221,14 @@ const clientUtils       = clientRoot.Utils;
       if (serverRoot.Packages)  mergeSystemLeaf(serverRoot.Packages, path.join(sRoot, "packages"));
     }
 
-    // shared
+    // shared assets/config under systems
     const shRoot = path.join(sysDir, "shared");
     if (isDir(shRoot)) {
-      // Assets: keep going to Shared/Assets
-      mirrorFolderAsModules(ensureFolder(sharedRoot, "Assets"), path.join(shRoot, "assets"));
+      // Merge UI/models from systems into Shared/Assets children
+      mirrorAssets(assetsUI,     path.join(shRoot, "assets", "ui"));
+      mirrorAssets(assetsModels, path.join(shRoot, "assets", "models"));
 
-      // Config: merge directly into Shared.Config (folder-backed ModuleScript)
+      // Merge Config under Shared.Config (folder-backed ModuleScript)
       if (!sharedRoot.Config) addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
       if (sharedRoot.Config)  mergeSystemLeaf(sharedRoot.Config, path.join(shRoot, "config"));
     }

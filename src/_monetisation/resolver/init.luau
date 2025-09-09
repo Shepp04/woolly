@@ -10,10 +10,11 @@ local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("
 local ReplicatedData = Packages.ReplicatedData
 
 -- // Assets
-local MonetisationOverlay = script:WaitForChild("MonetisationOverlay")
+local UIAssets = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Assets"):WaitForChild("UI")
+local MonetisationOverlay = UIAssets:WaitForChild("MonetisationOverlay")
 
 -- // Constants
-local SNAPSHOT_KEY = "MonetisationProducts"
+local SNAPSHOT_KEY = "MonetisationData"
 
 type BasePublic = {
 	id: number,
