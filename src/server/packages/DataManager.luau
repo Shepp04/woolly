@@ -4,11 +4,12 @@
 --// Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 --// Packages
 local ExternalPackages = ReplicatedStorage:WaitForChild("ExternalPackages")
-local ProfileStore = require(ExternalPackages:WaitForChild("ProfileStore"))
-local Promise = require(ExternalPackages:WaitForChild("Promise"))
+local ProfileStore = require(ServerScriptService.Server.Packages.ProfileStore)
+local Promise = require(ExternalPackages.Promise)
 
 local SharedPackages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
 local ReplicatedData = SharedPackages.ReplicatedData
