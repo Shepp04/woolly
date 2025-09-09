@@ -13,7 +13,7 @@ local GameData = require(ReplicatedStorage.Shared.GameData)
 local Monetisation = require(ReplicatedStorage.Shared.Monetisation)
 
 -- ========== UI/UX ========== --
-local UX = require(script.Parent.Components.UX)
+local UX = require(script.Parent.Controllers.UX)
 UX:Init(); UX:Start()
 
 -- ========== Controllers ========== --
