@@ -2,7 +2,7 @@
 -- Server-only SSOT for monetisation. Do not require from clients.
 
 -- // Types
-export type Handler = (player: Player, productId: number) -> boolean
+export type Handler = (player: Player, productId: number, params: { any }?, deps: { any }?) -> boolean
 
 export type BaseProductPublic = {
 	id: number,
@@ -40,12 +40,12 @@ local Handlers: { devProducts: { [string]: Handler }, gamepasses: { [string]: Ha
 	gamepasses = {},
 }
 
-Handlers.devProducts.CurrencyDevProduct = function(player: Player, productId: number): boolean
+Handlers.devProducts.CurrencyDevProduct = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
 	-- TODO: Grant currency etc.
 	return true
 end
 
-Handlers.gamepasses.MultiplierGamepass = function(player: Player, productId: number): boolean
+Handlers.gamepasses.MultiplierGamepass = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
 	-- NOTE: Gamepasses are not fulfilled via receipts; handler can be used for side-effects elsewhere.
 	return true
 end
@@ -86,13 +86,13 @@ function ProductDefs.GetGamepassFromName(name: string): GamepassPrivate?
 	return ProductDefs.items.gamepasses[name]
 end
 
-function ProductDefs.GetDevProductFromId(id: number): DevProductPrivate?
+function ProductDefs.GetDevProductFromId(id: number): (string?, DevProductPrivate?)
 	for _, def in ProductDefs.items.devProducts do
 		if def.id == id then return def end
 	end
 end
 
-function ProductDefs.GetGamepassFromId(id: number): GamepassPrivate?
+function ProductDefs.GetGamepassFromId(id: number): (string?, GamepassPrivate?)
 	for _, def in ProductDefs.items.gamepasses do
 		if def.id == id then return def end
 	end
