@@ -2,10 +2,12 @@
 -- Shared Config index *typed for known modules
 
 export type DataConfig = typeof(require(script.Data))
+export type PlayerConfig = typeof(require(script.Players))
 export type SoundsConfig = typeof(require(script.Sounds))
 
 export type ConfigIndex = {
     Data: DataConfig,
+    Players: PlayerConfig,
     Sounds: SoundsConfig,
     -- more types modules here
 }
@@ -14,6 +16,7 @@ local Config = {} :: any
 
 -- Typed, explicit requires
 Config.Data = require(script:WaitForChild("Data"))
+Config.Players = require(script:WaitForChild("Players"))
 Config.Sounds = require(script:WaitForChild("Sounds"))
 
 -- Auto-loader

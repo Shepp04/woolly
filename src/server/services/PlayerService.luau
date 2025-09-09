@@ -1,6 +1,11 @@
 --!strict
 -- // Services
 local Players = game:GetService("Players")
+local PhysicsService = game:GetService("PhysicsService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- // Config
+local PlayersConfig = require(ReplicatedStorage.Shared.Config).Players
 
 export type Deps = {
     DataInterface: {
@@ -14,6 +19,7 @@ export type PlayerService = {
     _inited: boolean,
     _started: boolean,
     _conns: { RBXScriptConnection },
+    _playerConns: { [Player]: { RBXScriptConnection } },
 
     Init: (self: PlayerService, deps: Deps) -> (),
     Start: (self: PlayerService) -> (),
@@ -35,16 +41,40 @@ local _deps: Deps?
 
 -- ========== Internal ========== --
 function PlayerService:_onCharacterAdded(player: Player, char: Model)
+    -- Get their humanoid
+    local human = char:WaitForChild("Humanoid") :: Humanoid
+
+    -- Set their walkspeed
+    if PlayersConfig and PlayersConfig.defaultWalkSpeed then
+        human.WalkSpeed = PlayersConfig.defaultWalkSpeed
+    end
+
     -- Update their nametag if the service is provided
     if self.Services and self.Services.NametagService then
         if self.Services.NametagService.Update then
             self.Services.NametagService:Update(player)
         end
     end
+
+    -- Set part collision groups
+    for _, v in char:GetDescendants() do
+        if v:IsA("BasePart") then
+            v.CollisionGroup = "Player"
+        end
+    end
+
+    table.insert(self._playerConns[player], char.DescendantAdded:Connect(function(v)
+        if v:IsA("BasePart") then
+            v.CollisionGroup = "Player"
+        end
+    end))
 end
 
 function PlayerService:_onPlayerAdded(player: Player)
     print(player.Name .. " has joined the game.")
+
+    -- Initialise conns bucket
+    self._playerConns[player] = {}
 
     -- Initialise player data
     local profile = _deps.DataInterface:LoadPlayerProfile(player)
@@ -57,7 +87,7 @@ function PlayerService:_onPlayerAdded(player: Player)
     local char = player.Character or player.CharacterAdded:Wait()
     self:_onCharacterAdded(player, char)
 
-    table.insert(self._conns, player.CharacterAdded:Connect(function(...)
+    table.insert(self._playerConns[player], player.CharacterAdded:Connect(function(...)
         self:_onCharacterAdded(player, ...)
     end))
 end
@@ -67,6 +97,12 @@ function PlayerService:_onPlayerRemove(player: Player)
 
     -- Cleanup player data
     _deps.DataInterface:ReleasePlayerProfile(player)
+
+    -- Cleanup conns
+    if self._playerConns[player] then
+        for _, c in self._playerConns[player] do c:Disconnect() end
+        self._playerConns[player] = nil
+    end
 end
 
 -- ========== Life Cycle ========== --
@@ -76,6 +112,14 @@ function PlayerService:Init(deps: Deps)
     _deps = deps
 
     self._conns = {}
+    self._playerConns = {}
+
+    -- Register player-player collision group
+    local playerCollisionsEnabled = PlayersConfig and PlayersConfig.playerCollisionsEnabled
+    if not PhysicsService:IsCollisionGroupRegistered("Player") then
+        PhysicsService:RegisterCollisionGroup("Player")
+        PhysicsService:CollisionGroupSetCollidable("Player", "Player", playerCollisionsEnabled)
+    end
 end
 
 function PlayerService:Start()
