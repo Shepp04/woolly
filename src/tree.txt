@@ -61,7 +61,8 @@ src
 │   └── services
 │       ├── _TemplateService.luau
 │       ├── DataInterface.luau
-│       └── init.luau
+│       ├── init.luau
+│       └── PlayerService.luau
 ├── shared
 │   ├── assets
 │   │   ├── models
@@ -71,13 +72,16 @@ src
 │   │   ├── _TemplateConfig.luau
 │   │   ├── Data.luau
 │   │   ├── init.luau
+│   │   ├── Players.luau
 │   │   └── Sounds.luau
 │   └── packages
 │       ├── _TemplatePackage.luau
 │       ├── Bindables.luau
+│       ├── Debounce.luau
 │       ├── init.luau
 │       ├── Remotes.luau
-│       └── ReplicatedData.luau
+│       ├── ReplicatedData.luau
+│       └── Sounds.luau
 └── tree.txt
 
-37 directories, 44 files
+37 directories, 48 files
