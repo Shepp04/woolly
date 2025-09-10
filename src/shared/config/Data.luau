@@ -1,5 +1,4 @@
 --!strict
-
 export type DataConfig = {
     dataTemplate: { [string]: any },
     infoTemplate: { [string]: any },

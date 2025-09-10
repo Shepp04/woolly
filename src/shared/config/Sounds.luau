@@ -13,13 +13,13 @@ export type SoundsConfig = {
 }
 
 local Sounds: SoundsConfig = {
-    volume = 1.00,
+    volume = 0.50, -- [0.00, 1.00]
     sounds = {
         UIClick01 = {
 			id = "rbxassetid://4499400560",
 			playbackSpeed = 1.0,
 			rolloffMaxDistance = 50,
-			volume = 0.5,
+			volume = 1.00, -- [0.00, 1.00]
         },
     },
     Get = function(self: SoundsConfig, name: string)
