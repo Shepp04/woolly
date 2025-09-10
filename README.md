@@ -45,66 +45,66 @@ Framework.StartClient()
     - Edit src/shared/config/*.luau to match the game (e.g Players, Sounds, Physics)
 
 ## Folder Structure
-src
-├── _game_data
-│   ├── resolver
-│   └── source
-│       └─── data_types
-├── _monetisation
-│   ├── resolver
-│   └── source
-├── _systems
-│   └── _TemplateSystem
-│       ├── client
-│       │   ├── components
-│       │   ├── controllers
-│       │   └── utils
-│       ├── server
-│       │   ├── packages
-│       │   └── services
-│       └── shared
-│           ├── assets
-│           │   ├── models
-│           │   └── ui
-│           └── config
-├── _types
-├── client
-│   ├── components
-│   ├── controllers
-│   └── utils
-├── server
-│   ├── packages
-│   └── services
-├── shared
-│   ├── assets
-│   │   ├── models
-│   │   └── ui
-│   ├── config
-│   └── packages
-└── tree.txt
+src   
+├── _game_data   
+│   ├── resolver   
+│   └── source   
+│       └─── data_types   
+├── _monetisation   
+│   ├── resolver   
+│   └── source   
+├── _systems   
+│   └── _TemplateSystem   
+│       ├── client   
+│       │   ├── components   
+│       │   ├── controllers   
+│       │   └── utils   
+│       ├── server   
+│       │   ├── packages   
+│       │   └── services   
+│       └── shared   
+│           ├── assets   
+│           │   ├── models   
+│           │   └── ui   
+│           └── config   
+├── _types   
+├── client   
+│   ├── components   
+│   ├── controllers   
+│   └── utils   
+├── server   
+│   ├── packages   
+│   └── services   
+├── shared   
+│   ├── assets   
+│   │   ├── models   
+│   │   └── ui   
+│   ├── config   
+│   └── packages   
+└── tree.txt   
 
 ## LifeCycle
-    - Server: Single Bootstrapper. Does the following:
-        - Initialises DataManager (backend)
-        - Requires shared and external packages
-        - Initialises all Services (in priority order)
-        - Starts all Services (in priority order)
-        - Initialises GameDataMaster
-        - Initialises Monetisation
-        - Starts Monetisation
+* Server: Single Bootstrapper. Does the following:
+    * Initialises DataManager (backend) 
+    * Requires shared and external packages
+    * Initialises all Services (in priority order)
+    * Starts all Services (in priority order)
+    * Initialises GameDataMaster
+    * Initialises Monetisation
+    * Starts Monetisation
 
-    - Client: Single Bootstrapper. Does the following:
-        - Requires shared and external packages
-        - Requires GameData
-        - Requires Monetisation
-        - Requires UX (animated Gui elements)
-        - Initialises Controllers
-        - Starts Controllers
+* Client: Single Bootstrapper. Does the following:
+    * Requires shared and external packages
+    * Requires GameData
+    * Requires Monetisation
+    * Requires UX (animated Gui elements)
+    * Initialises Controllers
+    * Starts Controllers
 
 ## Key Concepts
-    - Services: Singletons that manage large game features. Has :Init(), :Start(), :Destroy() methods (e.g DataInterface, CurrencyService)
-    - Controllers (Client): Orchestrates UX, input, and client components. Has :Init(), :Start(), :Destroy() methods.
-    - Components (Client): Small, focused behaviours attached to instances/UI. Has .new() constructor, and :Start() and :Destroy() methods
-    - GameData: Flexible data library that provides public and private views of data, redacted by the server. Provides a public Resolver in ReplicatedStorage. Add new data types by adding new child modules.
-    - Monetisation: Flexible product library that provides public and private views (e.g server handlers are kept private). Provides a public Resolver that exposes useful methods such as PromptSale.
-    - Config: Central SOT for Ids, flags, tunables, and constants
+* Services: Singletons that manage large game features. Has :Init(), :Start(), :Destroy() methods (e.g DataInterface, CurrencyService)
+* Controllers (Client): Orchestrates UX, input, and client components. Has :Init(), :Start(), :Destroy() methods.
+* Components (Client): Small, focused behaviours attached to instances/UI. Has .new() constructor, and :Start() and :Destroy() methods
+* GameData: Flexible data library that provides public and private views of data, redacted by the server. Provides a public Resolver in ReplicatedStorage. Add new data types by adding new child modules.
+* Monetisation: Flexible product library that provides public and private views (e.g server handlers are kept private). Provides a public Resolver that exposes useful methods such as PromptSale.
+* Config: Central SOT for Ids, flags, tunables, and constants
