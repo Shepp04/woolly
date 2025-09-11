@@ -1,101 +1,48 @@
 # Woolly Framework
+A scalable Roblox framework that handles **data saving** and **replication**, provides **monetisation** features, supports self-contained **systems**, and uses the `Services` `Controllers` `Components` pattern.
 
-A lightweight, production-ready framework for Roblox experiences. Batteries included for:
-**Services, Packages, GameData, Monetisation, Config, Controllers, Components.**
+---
 
-- **Clear client/server boundaries**
-- **Config-driven** features
-- **Composable Components** for entities/UX
-- **Controllers** for client UX & input flows
-- **First-class Monetisation** hooks
-- **GameData** abstraction for profile & session state
+## Setup
+This framework requires Rojo - see Rojo's docs here: ...
 
-> This is the **MVP** release. See **Releases** for versioning and changelog.
+To create a new project, clone this repository and run:
+```
+wally install
+```
+This will install the necessary dependencies (Promise, Trove etc.) and put them in the /Packages directory.
 
-## Contents
-- [Quick Start](#quick-start)
-- [Folder Structure](#folder-structure)
-- [Lifecycle](#lifecycle)
-- [Key Concepts](#key-concepts)
-- [Docs](#docs)
-- [Examples](#examples)
-- [Contributing](#contributing)
-- [License](#license)
+Run:
+```
+rojo build -o build.rbxl
+```
+to build a Roblox place file.
+Any time you add a new folder as a descendant of src, run:
+```
+node tools/genRojoTree.js
+```
+to regenerate the `default.project.json` file, and then run
+```
+rojo serve
+```
+to re-sync to Studio.
 
-## Quick Start
+---
 
-1. **Install / Sync**
-   - Clone or drop the framework folder into your place (e.g. under `ReplicatedStorage/Framework` + `ServerScriptService`).
-   - If you use Rojo, add the path in your `default.project.json`.
+## Documentation
+Please see /docs for documentation on the various types of file. Below is a quick summary of these types:
 
-2. **Install Wally Packages**
-    - run wally install to install the required dependencies (Promise)
-3. **Build Rojo Tree**
-    - Run 'node tools/genRojoTree.js' every time you add a new directory to the project's src folder
-4. **Configure**
-    - Edit src/shared/config/*.luau to match the game (e.g Players, Sounds, Physics)
+#### Services
+server-only *singleton* modules that manage the logic for a specific system in your game.
 
-## Folder Structure
-src   
-├── _game_data   
-│   ├── resolver   
-│   └── source   
-│       └─── data_types   
-├── _monetisation   
-│   ├── resolver   
-│   └── source   
-├── _systems   
-│   └── _TemplateSystem   
-│       ├── client   
-│       │   ├── components   
-│       │   ├── controllers   
-│       │   └── utils   
-│       ├── server   
-│       │   ├── packages   
-│       │   └── services   
-│       └── shared   
-│           ├── assets   
-│           │   ├── models   
-│           │   └── ui   
-│           └── config   
-├── _types   
-├── client   
-│   ├── components   
-│   ├── controllers   
-│   └── utils   
-├── server   
-│   ├── packages   
-│   └── services   
-├── shared   
-│   ├── assets   
-│   │   ├── models   
-│   │   └── ui   
-│   ├── config   
-│   └── packages   
-└── tree.txt   
+#### Controllers
+client-only *singleton* modules that manage the client logic for a specific system in your game.
 
-## LifeCycle
-* Server: Single Bootstrapper. Does the following:
-    * Initialises DataManager (backend) 
-    * Requires shared and external packages
-    * Initialises all Services (in priority order)
-    * Starts all Services (in priority order)
-    * Initialises GameDataMaster
-    * Initialises Monetisation
-    * Starts Monetisation
+#### Components
+client class modules that handle UI elements and self-contained client systems.
 
-* Client: Single Bootstrapper. Does the following:
-    * Requires shared and external packages
-    * Requires GameData
-    * Requires Monetisation
-    * Requires UX (animated Gui elements)
-    * Initialises Controllers
-    * Starts Controllers
+#### Packages
+modules that contain useful methods that aren't game-specific
 
-## Key Concepts
-* Services: Singletons that manage large game features. Has :Init(), :Start(), :Destroy() methods (e.g DataInterface, CurrencyService)
-* Controllers (Client): Orchestrates UX, input, and client components. Has :Init(), :Start(), :Destroy() methods.
-* Components (Client): Small, focused behaviours attached to instances/UI. Has .new() constructor, and :Start() and :Destroy() methods
-* GameData: Flexible data library that provides public and private views of data, redacted by the server. Provides a public Resolver in ReplicatedStorage. Add new data types by adding new child modules.
-* Monetisation: Flexible product library that provides public and private views (e.g server handlers are kept private). Provides a public Resolver that exposes useful methods such as PromptSale.
-* Config: Central SOT for Ids, flags, tunables, and constants
+#### Config
+contains ids, constants, and tunables and is accessed through a central registry.
