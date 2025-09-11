@@ -36,6 +36,11 @@ const toPascal = (s) => {
 
 const isModelFile = (name) => name.endsWith(".rbxm") || name.endsWith(".rbxmx");
 
+function getNode(parent, key) {
+  if (!parent[key]) parent[key] = { $className: "Folder" };
+  return parent[key];
+}
+
 // Ensure & get folder node
 function ensureFolder(parent, key) {
   if (!parent[key]) parent[key] = { $className: "Folder" };
@@ -87,6 +92,19 @@ function mirrorFolderAsModules(destParent, srcDir) {
     } else if (entry.isFile() && LU(entry.name)) {
       addFile(destParent, stripExt(entry.name), full);
     }
+  }
+}
+
+// Mount a “section” that may be folder-backed or a plain folder
+function mountSection(parent, nodeName, absDir) {
+  if (!isDir(absDir)) return; // nothing to mount
+  if (hasInitFile(absDir)) {
+    // Folder-backed ModuleScript
+    addFolderModule(parent, nodeName, absDir);
+  } else {
+    // Plain folder; mirror child modules into it
+    const node = ensureFolder(parent, nodeName);
+    mirrorFolderAsModules(node, absDir);
   }
 }
 
@@ -170,9 +188,6 @@ const tree = {
       StarterPlayerScripts: {
         Client: {
           $className: "Folder",
-          Controllers: { $className: "Folder" },
-          Components:  { $className: "Folder" },
-          Utils:       { $className: "Folder" },
         }
       }
     }
@@ -182,7 +197,6 @@ const tree = {
 const sharedRoot = tree.tree.ReplicatedStorage.Shared;
 const serverRoot = tree.tree.ServerScriptService.Server;
 const clientRoot = tree.tree.StarterPlayer.StarterPlayerScripts.Client;
-const clientControllers = clientRoot.Controllers;
 const clientComponents  = clientRoot.Components;
 const clientUtils       = clientRoot.Utils;
 
@@ -228,19 +242,31 @@ const clientUtils       = clientRoot.Utils;
   const bootCli = path.join(SRC_CLIENT, "Bootstrap.client.luau");
   if (isFile(bootCli)) addFile(clientRoot, "Bootstrap", bootCli);
 
-  mirrorFolderAsModules(clientControllers, path.join(SRC_CLIENT, "controllers"));
-  mirrorFolderAsModules(clientComponents,  path.join(SRC_CLIENT, "components"));
-  mirrorFolderAsModules(clientUtils,       path.join(SRC_CLIENT, "utils"));
+  // Mount sections — auto folder-backed if init.* exists, else as Folder
+  mountSection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"));
+  mountSection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"));
+  mountSection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"));
 })();
 
+// ==== 4) Systems merge ====
 // ==== 4) Systems merge ====
 (function mergeSystems() {
   if (!isDir(SYS_ROOT)) return;
 
-  // Prepare shared assets nodes once
+  // Shared assets nodes (unchanged)
   const assetsFolder = ensureFolder(sharedRoot, "Assets");
   const assetsUI = ensureFolder(assetsFolder, "UI");
   const assetsModels = ensureFolder(assetsFolder, "Models");
+
+  // Ensure client sections exist the same way as core
+  // (If the repo has init.* in src/client/controllers, they'll be ModuleScripts; otherwise Folders.)
+  mountSection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"));
+  mountSection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"));
+  mountSection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"));
+
+  const clientControllers = clientRoot.Controllers;
+  const clientComponents  = clientRoot.Components;
+  const clientUtils       = clientRoot.Utils;
 
   for (const sysName of fs.readdirSync(SYS_ROOT)) {
     const sysDir = path.join(SYS_ROOT, sysName);
@@ -254,7 +280,7 @@ const clientUtils       = clientRoot.Utils;
       mergeSystemLeaf(clientUtils,       path.join(cRoot, "utils"));
     }
 
-    // server
+    // server (unchanged)
     const sRoot = path.join(sysDir, "server");
     if (isDir(sRoot)) {
       if (!serverRoot.Services) addFolderModule(serverRoot, "Services", path.join(SRC_SERVER, "services"));
@@ -264,14 +290,12 @@ const clientUtils       = clientRoot.Utils;
       if (serverRoot.Packages)  mergeSystemLeaf(serverRoot.Packages, path.join(sRoot, "packages"));
     }
 
-    // shared assets/config under systems
+    // shared assets/config (unchanged)
     const shRoot = path.join(sysDir, "shared");
     if (isDir(shRoot)) {
-      // Merge UI/models from systems into Shared/Assets children
       mirrorAssets(assetsUI,     path.join(shRoot, "assets", "ui"));
       mirrorAssets(assetsModels, path.join(shRoot, "assets", "models"));
 
-      // Merge Config under Shared.Config (folder-backed ModuleScript)
       if (!sharedRoot.Config) addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
       if (sharedRoot.Config)  mergeSystemLeaf(sharedRoot.Config, path.join(shRoot, "config"));
     }

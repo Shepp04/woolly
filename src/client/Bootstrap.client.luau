@@ -12,11 +12,10 @@ local GameData = require(ReplicatedStorage.Shared.GameData)
 -- ========== Monetisation =========== --
 local Monetisation = require(ReplicatedStorage.Shared.Monetisation)
 
--- ========== UI/UX ========== --
-local UX = require(script.Parent.Controllers.UX)
-UX:Init(); UX:Start()
-
 -- ========== Controllers ========== --
+local Controllers = require(script.Parent.Controllers)
+Controllers.InitAll()
+Controllers.StartAll()
 
 -- ========== Init ========== --
 print(`[CLIENT | Loaded Successfully]`)
