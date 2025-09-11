@@ -40,12 +40,14 @@ local Handlers: { devProducts: { [string]: Handler }, gamepasses: { [string]: Ha
 	gamepasses = {},
 }
 
+-- // Dev Products
 Handlers.devProducts.CurrencyDevProduct = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
 	-- TODO: Grant currency etc.
 	print("Granted")
 	return true
 end
 
+-- // Gamepasses
 Handlers.gamepasses.MultiplierGamepass = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
 	-- NOTE: Gamepasses are not fulfilled via receipts; handler can be used for side-effects elsewhere.
 	return true
@@ -56,26 +58,30 @@ local ProductDefs = {} :: ProductDefs
 ProductDefs.public_field_blacklist = { handler = true }
 ProductDefs.items = { devProducts = {}, gamepasses = {} }
 
-ProductDefs.items.devProducts.DevProduct01 = {
-	id = 1151725677,
-	name = "Dev Product 01",
-	category = "Currency",
-	description = nil, -- hydrated later
-	priceInRobux = nil, -- hydrated later
-	iconImageAssetId = nil, -- hydrated later
-	handler = Handlers.devProducts.CurrencyDevProduct,
-	params = { value = 10, currencyId = "Cash" },
+ProductDefs.items.devProducts = {
+	DevProduct01 = {
+		id = 1151725677,
+		name = "Dev Product 01",
+		category = "Currency",
+		description = nil, -- hydrated later
+		priceInRobux = nil, -- hydrated later
+		iconImageAssetId = nil, -- hydrated later
+		handler = Handlers.devProducts.CurrencyDevProduct,
+		params = { value = 10, currencyId = "Cash" },
+	},
 }
 
-ProductDefs.items.gamepasses.DoubleCurrency = {
-	id = 12345678,
-	name = "Double Currency",
-	category = "Multipliers",
-	description = nil,
-	priceInRobux = nil,
-	iconImageAssetId = nil,
-	handler = Handlers.gamepasses.MultiplierGamepass,
-	params = { value = 2, currencyId = "Cash" },
+ProductDefs.items.gamepasses = {
+	DoubleCurrency = {
+		id = 12345678,
+		name = "Double Currency",
+		category = "Multipliers",
+		description = nil,
+		priceInRobux = nil,
+		iconImageAssetId = nil,
+		handler = Handlers.gamepasses.MultiplierGamepass,
+		params = { value = 2, currencyId = "Cash" },
+	},
 }
 
 -- Simple lookup helpers (server-side, return private entries)
