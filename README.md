@@ -28,20 +28,11 @@ A lightweight, production-ready framework for Roblox experiences. Batteries incl
    - Clone or drop the framework folder into your place (e.g. under `ReplicatedStorage/Framework` + `ServerScriptService`).
    - If you use Rojo, add the path in your `default.project.json`.
 
-2. **Bootstrap**
-   - Server: require and start `ServerMain`.
-   - Client: require and start `ClientMain`.
-
-```lua
--- ServerScriptService/ServerMain.server.lua
-local Framework = require(game.ReplicatedStorage.Framework)
-Framework.StartServer()
-
--- StarterPlayerScripts/ClientMain.client.lua
-local Framework = require(game.ReplicatedStorage.Framework)
-Framework.StartClient()
-```
-3. **Configure**
+2. **Install Wally Packages**
+    - run wally install to install the required dependencies (Promise)
+3. **Build Rojo Tree**
+    - Run 'node tools/genRojoTree.js' every time you add a new directory to the project's src folder
+4. **Configure**
     - Edit src/shared/config/*.luau to match the game (e.g Players, Sounds, Physics)
 
 ## Folder Structure
