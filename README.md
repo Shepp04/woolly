@@ -4,7 +4,7 @@ A scalable Roblox framework that handles **data saving** and **replication**, pr
 ---
 
 ## Setup
-This framework requires Rojo - see Rojo's docs here: ...
+This framework requires Rojo - see Rojo's docs here: [rojo docs](https://rojo.space/docs)
 
 To create a new project, clone this repository and run:
 ```
@@ -33,16 +33,16 @@ to re-sync to Studio.
 Please see /docs for documentation on the various types of file. Below is a quick summary of these types:
 
 #### Services
-server-only *singleton* modules that manage the logic for a specific system in your game.
+> server-only *singleton* modules that manage the logic for a specific system in your game.
 
 #### Controllers
-client-only *singleton* modules that manage the client logic for a specific system in your game.
+> client-only *singleton* modules that manage the client logic for a specific system in your game.
 
 #### Components
-client class modules that handle UI elements and self-contained client systems.
+> client class modules that handle UI elements and self-contained client systems.
 
 #### Packages
-modules that contain useful methods that aren't game-specific
+> modules that contain useful methods that aren't game-specific
 
 #### Config
-contains ids, constants, and tunables and is accessed through a central registry.
+> contains ids, constants, and tunables and is accessed through a central registry.
