@@ -70,14 +70,11 @@
       "StarterPlayerScripts": {
         "Client": {
           "$className": "Folder",
+          "Bootstrap": {
+            "$path": "src/client/Bootstrap.client.luau"
+          },
           "Controllers": {
-            "$className": "Folder",
-            "UX": {
-              "$path": "src/client/controllers/UX"
-            },
-            "_TemplateController": {
-              "$path": "src/client/controllers/_TemplateController.luau"
-            },
+            "$path": "src/client/controllers",
             "_TemplateController2": {
               "$path": "src/_systems/_TemplateSystem/client/controllers/_TemplateController2.luau"
             }
@@ -99,9 +96,6 @@
             "_TemplateUtil2": {
               "$path": "src/_systems/_TemplateSystem/client/utils/_TemplateUtil2.luau"
             }
-          },
-          "Bootstrap": {
-            "$path": "src/client/Bootstrap.client.luau"
           }
         }
       }
