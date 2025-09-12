@@ -64,11 +64,11 @@ end
 
 -- Initializes a player profile when loaded
 local function onProfileLoad(player: Player, profile: Types.PlayerProfile)
-	-- Reconcile all sections into data
-	DataManager:ReconcileAllSections(player, profile)
-
 	-- Initialise Info
 	profile.Info = deepClone(INFO_TEMPLATE)
+
+	-- Reconcile all sections into data
+	DataManager:ReconcileAllSections(player, profile)
 
 	-- Extra temporary values
 	local now = os.time()
@@ -83,9 +83,9 @@ local function onProfileLoad(player: Player, profile: Types.PlayerProfile)
 	-- Save join time locally for playtime calc
 	profile.Info.JoinTime = os.time()
 
+	-- Replicate main data sections (reconciled sections are also replicated)
 	ReplicatedData:SetData("PlayerData", profile.Data, { player })
 	ReplicatedData:SetData("PlayerInfo", profile.Info, { player })
-	ReplicatedData:SetData("Stats", profile.Data.Stats, { player })
 end
 
 --[[ 
@@ -177,6 +177,9 @@ function DataManager:ReconcileProfileSection(player: Player, profile: Types.Play
 		deepReconcile(profile.Data[sectionName], template)
 		ReplicatedData:SetData("PlayerData", profile.Data, { player })
 	end
+
+	-- Replicate this section to the client
+	ReplicatedData:SetData(sectionName, template, { player })
 
 	return true
 end
