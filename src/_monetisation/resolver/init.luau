@@ -1,190 +1,280 @@
 --!strict
--- Shared resolver: read public catalog from ReplicatedData and provide helpers
+-- Monetisation resolver with server-initiated prompts & overlay control
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 
-local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
-local ReplicatedData = Packages.ReplicatedData
-
--- // Assets
-local UIAssets = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Assets"):WaitForChild("UI")
-local MonetisationOverlay = UIAssets:WaitForChild("MonetisationOverlay")
-
--- // Constants
-local SNAPSHOT_KEY = "MonetisationData"
-
+-- Shared shapes (align with ProductDefs)
 type BasePublic = {
-	id: number,
-	name: string,
-	category: string?,
-	description: string?,
-	priceInRobux: number?,
-	iconImageAssetId: string?,
-	params: { any }?,
+    id: number,
+    name: string,
+    category: string?,
+    description: string?,
+    priceInRobux: number?,
+    iconImageAssetId: string?,
+    params: { any }?,
 }
-type Snapshot = {
-	devProducts: { [string]: BasePublic },
-	gamepasses:  { [string]: BasePublic },
+type BasePrivate = BasePublic & {
+    handler: (player: Player, params: any) -> boolean,
 }
 
--- Local cache + indexes
-local _data: Snapshot = ReplicatedData:GetData(SNAPSHOT_KEY, true) or { devProducts = {}, gamepasses = {} }
-local _devById: { [number]: BasePublic } = {}
-local _gpById:  { [number]: BasePublic } = {}
+type SnapshotPublic = {
+    devProducts: { [string]: BasePublic },
+    gamepasses:  { [string]: BasePublic },
+}
 
-local function reindex()
-	_devById = {}; _gpById = {}
-	for _, d in _data.devProducts do _devById[d.id] = d end
-	for _, g in _data.gamepasses  do _gpById[g.id] = g end
-end
-reindex()
-
--- Keep fresh on client
-if not RunService:IsServer() then
-	ReplicatedData.OnUpdate.Event:Connect(function(category: string, value: any)
-		if category == SNAPSHOT_KEY then
-			_data = value :: Snapshot
-			reindex()
-		end
-	end)
-end
-
--- ========== Internal ========== --
 local Resolver = {}
-function Resolver._showOverlay(player: Player?)
-    local player = player or Players.LocalPlayer
-    if not player then
-        warn("[MonetisationPublic] Show Overlay error: missing player argument")
-        return
+
+-- // Remotes
+local SharedPackages = require(game.ReplicatedStorage.Shared.Packages)
+local Remotes = SharedPackages.Remotes
+local PromptRemote = Remotes:GetRemote("RemoteEvent", "MonetisationPrompt") :: RemoteEvent
+
+-- Payload we’ll send server->client
+-- { action = "prompt" | "show" | "hide",
+--   kind = "dev" | "gp" | "auto"?,
+--   id: number?,
+--   name: string?,
+--   show: boolean? }
+--
+
+-- ========= Client branch =========
+if RunService:IsClient() then
+    local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
+    local ReplicatedData = Packages.ReplicatedData
+
+    -- UI overlay (optional)
+    local UIAssets = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Assets"):WaitForChild("UI")
+    local MonetisationOverlay = UIAssets:FindFirstChild("MonetisationOverlay")
+
+    local CATEGORY = "MonetisationData"
+
+    local _data: SnapshotPublic = ReplicatedData:GetStatic(CATEGORY, true) or { devProducts = {}, gamepasses = {} }
+    local _devById: { [number]: BasePublic } = {}
+    local _gpById:  { [number]: BasePublic } = {}
+
+    local function reindex()
+        table.clear(_devById); table.clear(_gpById)
+        for _, d in _data.devProducts do _devById[d.id] = d end
+        for _, g in _data.gamepasses  do _gpById[g.id]  = g end
     end
+    reindex()
 
-    local playerGui = player:FindFirstChild("PlayerGui")
-	if playerGui then
-		local old = playerGui:FindFirstChild("MonetisationOverlay")
-		if old then old:Destroy() end
-		
-		local overlayGui = MonetisationOverlay:Clone()
-		overlayGui.Parent = playerGui
-	end
-end
-
-function Resolver._hideOverlay(player: Player?)
-    local player = player or Players.LocalPlayer
-    if not player then
-        warn("[MonetisationPublic] Show Overlay error: missing player argument")
-        return
-    end
-
-    local playerGui = player:FindFirstChild("PlayerGui")
-	local overlayGui = playerGui and playerGui:FindFirstChild("MonetisationOverlay")
-	if overlayGui then
-		task.spawn(function()
-			for _, v in overlayGui:GetChildren() do
-				if (v:IsA("CanvasGroup")) then
-					for i = 0, 1, 0.05 do
-						v.GroupTransparency = i
-						task.wait()
-					end
-				end
-			end
-			overlayGui:Destroy()
-		end)
-	end
-end
-
--- ========== Public API ========== --
-
-function Resolver.GetDevProductByName(name: string): BasePublic?
-	if _data.devProducts[name] then
-        return _data.devProducts[name]
-    end
-    warn(`[MonetisationPublic] No dev product with name {name}`)
-    return nil
-end
-
-function Resolver.GetDevProductById(id: number): BasePublic?
-	if _devById[id] then
-        return _devById[id]
-    end
-    warn(`[MonetisationPublic] No dev product with id {id}`)
-    return nil
-end
-
-function Resolver.GetGamepassByName(name: string): BasePublic?
-	if _data.gamepasses[name] then
-        return _data.gamepasses[name]
-    end
-    warn(`[MonetisationPublic] No gamepass with name {name}`)
-    return nil
-end
-
-function Resolver.GetGamepassById(id: number): BasePublic?
-	if _gpById[id] then
-        return _gpById[id]
-    end
-    warn(`[MonetisationPublic] No gamepass with id {id}`)
-    return nil
-end
-
-function Resolver.FindByName(name: string): BasePublic?
-	return _data.devProducts[name] or _data.gamepasses[name]
-end
-function Resolver.FindById(id: number): BasePublic?
-	return _devById[id] or _gpById[id]
-end
-
-function Resolver.GetCatalog(): Snapshot
-	return _data
-end
-
--- Convenience: check if a catalog entry reports for sale
-function Resolver.IsForSale(entry: BasePublic?): boolean
-	return entry ~= nil and entry.priceInRobux ~= nil
-end
-
--- Prompt by name or id (dev product or gamepass)
-function Resolver.PromptSale(key: string | number, player: Player?)
-    player = player or Players.LocalPlayer
-    if not player then
-        warn(`[MonetisationPublic] Prompt Sale error: no player provided`)
-        return
-    end
-
-    -- Find the dev product or gamepass to sell
-    local dev, gp
-	if typeof(key) == "number" then
-		dev = _devById[key]; gp = _gpById[key]
-	else
-		dev = _data.devProducts[key]; gp = _data.gamepasses[key]
-	end
-
-	if dev then
-        Resolver._showOverlay(player)
-		MarketplaceService:PromptProductPurchase(player, dev.id)
-		return true
-	elseif gp then
-        Resolver._showOverlay(player)
-		MarketplaceService:PromptGamePassPurchase(player, gp.id)
-		return true
-	end
-	return false
-end
-
-local function initialise()
-    if RunService:IsClient() then
-        MarketplaceService.PromptGamePassPurchaseFinished:Connect(function()
-            Resolver._hideOverlay()
+    if typeof(ReplicatedData.OnStaticChanged) == "function" then
+        ReplicatedData:OnStaticChanged(CATEGORY, function(newBlob)
+            if newBlob then _data = newBlob :: SnapshotPublic; reindex() end
         end)
-        MarketplaceService.PromptProductPurchaseFinished:Connect(function()
-            Resolver._hideOverlay()
+    else
+        ReplicatedData.OnUpdate.Event:Connect(function(cat, value)
+            if cat == CATEGORY then _data = value :: SnapshotPublic; reindex() end
         end)
     end
+
+    -- Overlay helpers
+    local function showOverlay(player: Player?)
+        if not MonetisationOverlay then return end
+        local plr = player or Players.LocalPlayer
+        local pg = plr and plr:FindFirstChild("PlayerGui")
+        if not pg then return end
+        local old = pg:FindFirstChild("MonetisationOverlay")
+        if old then old:Destroy() end
+        local clone = MonetisationOverlay:Clone()
+        clone.Parent = pg
+    end
+
+    local function hideOverlay(player: Player?)
+        local plr = player or Players.LocalPlayer
+        local pg = plr and plr:FindFirstChild("PlayerGui")
+        local overlay = pg and pg:FindFirstChild("MonetisationOverlay")
+        if overlay then
+            task.spawn(function()
+                for _, v in overlay:GetChildren() do
+                    if v:IsA("CanvasGroup") then
+                        for i = 0, 1, 0.05 do
+                            v.GroupTransparency = i
+                            task.wait()
+                        end
+                    end
+                end
+                overlay:Destroy()
+            end)
+        end
+    end
+
+    -- Purchase finished → auto-hide
+    MarketplaceService.PromptGamePassPurchaseFinished:Connect(function()
+        hideOverlay()
+    end)
+    MarketplaceService.PromptProductPurchaseFinished:Connect(function()
+        hideOverlay()
+    end)
+
+    -- Public API (client)
+    local function resolveEntry(kind: string?, id: number?, name: string?): BasePublic?
+        if kind == "dev" then
+            if id then return _devById[id] end
+            if name then return _data.devProducts[name] end
+        elseif kind == "gp" then
+            if id then return _gpById[id] end
+            if name then return _data.gamepasses[name] end
+        else -- auto
+            if id then return _devById[id] or _gpById[id] end
+            if name then return _data.devProducts[name] or _data.gamepasses[name] end
+        end
+        return nil
+    end
+
+    function Resolver.GetDevProductByName(name: string): BasePublic?
+        local v = _data.devProducts[name]
+        if not v then warn(("[Monetisation] No dev product named %s"):format(name)) end
+        return v
+    end
+    function Resolver.GetDevProductById(id: number): BasePublic?
+        local v = _devById[id]
+        if not v then warn(("[Monetisation] No dev product id %d"):format(id)) end
+        return v
+    end
+    function Resolver.GetGamepassByName(name: string): BasePublic?
+        local v = _data.gamepasses[name]
+        if not v then warn(("[Monetisation] No gamepass named %s"):format(name)) end
+        return v
+    end
+    function Resolver.GetGamepassById(id: number): BasePublic?
+        local v = _gpById[id]
+        if not v then warn(("[Monetisation] No gamepass id %d"):format(id)) end
+        return v
+    end
+    function Resolver.FindByName(name: string): BasePublic?
+        return _data.devProducts[name] or _data.gamepasses[name]
+    end
+    function Resolver.FindById(id: number): BasePublic?
+        return _devById[id] or _gpById[id]
+    end
+    function Resolver.GetCatalog(): SnapshotPublic
+        return _data
+    end
+    function Resolver.IsForSale(entry: BasePublic?): boolean
+        return entry ~= nil and entry.priceInRobux ~= nil
+    end
+
+    -- Client-local prompt (UI action on client)
+    function Resolver.PromptSale(key: string | number, player: Player?)
+        local plr = player or Players.LocalPlayer
+        if not plr then return false end
+
+        local dev: BasePublic?; local gp: BasePublic?
+        if typeof(key) == "number" then
+            dev = _devById[key]; gp = _gpById[key]
+        else
+            dev = _data.devProducts[key]; gp = _data.gamepasses[key]
+        end
+
+        if dev then
+            showOverlay(plr)
+            MarketplaceService:PromptProductPurchase(plr, dev.id)
+            return true
+        elseif gp then
+            showOverlay(plr)
+            MarketplaceService:PromptGamePassPurchase(plr, gp.id)
+            return true
+        end
+        return false
+    end
+
+    -- Server → client control
+    PromptRemote.OnClientEvent:Connect(function(payload: any)
+        local action = payload and payload.action
+        if action == "show" then
+            showOverlay(Players.LocalPlayer)
+        elseif action == "hide" then
+            hideOverlay(Players.LocalPlayer)
+        elseif action == "prompt" then
+            local entry = resolveEntry(payload.kind, payload.id, payload.name)
+            if not entry then return end
+            if payload.show ~= false then showOverlay(Players.LocalPlayer) end
+            if payload.kind == "dev" or (not payload.kind and entry and _devById[entry.id]) then
+                MarketplaceService:PromptProductPurchase(Players.LocalPlayer, entry.id)
+            else
+                MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, entry.id)
+            end
+        end
+    end)
+
+    return Resolver
 end
 
--- Initialisation
-initialise()
+-- ========= Server branch =========
+do
+    local ServerScriptService = game:GetService("ServerScriptService")
+    local ProductDefs = require(ServerScriptService:WaitForChild("Server"):WaitForChild("Monetisation"):WaitForChild("ProductDefs"))
 
-return Resolver
+    local _devByName = (ProductDefs.items and ProductDefs.items.devProducts) or {}
+    local _gpByName  = (ProductDefs.items and ProductDefs.items.gamepasses)  or {}
+
+    local _devById: { [number]: BasePrivate } = {}
+    local _gpById:  { [number]: BasePrivate } = {}
+    for _, d in _devByName do _devById[d.id] = d end
+    for _, g in _gpByName  do _gpById[g.id]  = g end
+
+    -- Private read helpers
+    function Resolver.GetDevProductByName(name: string): BasePrivate? return _devByName[name] end
+    function Resolver.GetDevProductById(id: number): BasePrivate? return _devById[id] end
+    function Resolver.GetGamepassByName(name: string): BasePrivate? return _gpByName[name] end
+    function Resolver.GetGamepassById(id: number): BasePrivate? return _gpById[id] end
+    function Resolver.FindByName(name: string): BasePrivate? return _devByName[name] or _gpByName[name] end
+    function Resolver.FindById(id: number): BasePrivate? return _devById[id] or _gpById[id] end
+    function Resolver.GetCatalog()
+        return { devProducts = _devByName, gamepasses = _gpByName }
+    end
+    function Resolver.IsForSale(entry: BasePrivate?): boolean
+        return entry ~= nil and entry.priceInRobux ~= nil
+    end
+
+    -- ===== Server → Client controls =====
+    local function send(player: Player, payload: any)
+        if not player or not player:IsDescendantOf(Players) then return end
+        PromptRemote:FireClient(player, payload)
+    end
+
+    -- Force overlay show/hide from server
+    function Resolver.ShowOverlay(player: Player)
+        send(player, { action = "show" })
+    end
+    function Resolver.HideOverlay(player: Player)
+        send(player, { action = "hide" })
+    end
+
+    -- Server-initiated prompt (client performs the prompt)
+    -- key can be name or id; kind optionally "dev"|"gp"|"auto"
+    function Resolver.PromptSale(player: Player, key: string | number, kind: ("dev"|"gp"|"auto")?, showOverlay: boolean?)
+        if not player then return false end
+
+        local payload = { action = "prompt", show = (showOverlay ~= false) } :: any
+
+        if typeof(key) == "number" then
+            local d = _devById[key]; local g = _gpById[key]
+            if d then payload.kind = "dev"; payload.id = d.id
+            elseif g then payload.kind = "gp"; payload.id = g.id
+            else
+                warn("[Monetisation] Unknown id:", key); return false
+            end
+        else
+            local d = _devByName[key]; local g = _gpByName[key]
+            if d then payload.kind = "dev"; payload.id = d.id; payload.name = key
+            elseif g then payload.kind = "gp"; payload.id = g.id; payload.name = key
+            else
+                warn("[Monetisation] Unknown name:", key); return false
+            end
+        end
+
+        -- optional override
+        if kind == "dev" or kind == "gp" then payload.kind = kind end
+
+        send(player, payload)
+        return true
+    end
+
+    return Resolver
+end
