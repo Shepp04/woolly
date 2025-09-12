@@ -10,18 +10,21 @@ DataManager:Init()
 local ServerPackages = require(ServerScriptService.Server.Packages)
 local SharedPackages = require(ReplicatedStorage.Shared.Packages)
 
+-- ========== Game Data ========== --
+local GameDataMaster = require(ServerScriptService.Server.GameDataMaster)
+GameDataMaster:Init()
+
 -- ========== Services ========== --
 local deps = {
     DataInterface = require(ServerScriptService.Server.Services.DataInterface),
+    SharedPackages = require(ReplicatedStorage.Shared.Packages),
+    GameData = require(ReplicatedStorage.Shared.GameData),
+    Monetisation = require(ReplicatedStorage.Shared.Monetisation),
 }
 
 local Services = require(ServerScriptService.Server.Services)
 Services.InitAll(deps)
 Services.StartAll()
-
--- ========== Game Data ========== --
-local GameDataMaster = require(ServerScriptService.Server.GameDataMaster)
-GameDataMaster:Init()
 
 -- ========== Monetisation ========== --
 local Monetisation = require(ServerScriptService.Server.Monetisation)
