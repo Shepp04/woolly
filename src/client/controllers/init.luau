@@ -11,7 +11,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 
 export type Controller = {
 	Priority: number?, -- lower runs earlier
-	Init: (self: Controller, deps: any) -> (),
+	Init: (self: Controller, deps: any?) -> (),
 	Start: (self: Controller) -> (),
 	Destroy: (self: Controller) -> (),
 	Controllers: any?, -- backref to registry
