@@ -179,7 +179,8 @@ function DataManager:ReconcileProfileSection(player: Player, profile: Types.Play
 	end
 
 	-- Replicate this section to the client
-	ReplicatedData:SetData(sectionName, template, { player })
+	local sectionTable = (sectionType == "Info") and profile.Info[sectionName] or profile.Data[sectionName]
+	ReplicatedData:SetData(sectionName, sectionTable, { player })
 
 	return true
 end
