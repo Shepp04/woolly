@@ -1,0 +1,7 @@
+{
+    "scripts": {
+        "setup": "node tools/bootstrap.js",
+        "woolly": "node tools/woolly.js",
+        "gen:rojo": "node tools/genRojoTree.js"
+    }
+}

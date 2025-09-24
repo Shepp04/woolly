@@ -81,6 +81,9 @@
           },
           "Components": {
             "$className": "Folder",
+            "ProductShop": {
+              "$path": "src/client/components/ProductShop.luau"
+            },
             "_TemplateComponent": {
               "$path": "src/client/components/_TemplateComponent.luau"
             },
@@ -90,6 +93,9 @@
           },
           "Utils": {
             "$className": "Folder",
+            "GuiRefs": {
+              "$path": "src/client/utils/GuiRefs.luau"
+            },
             "_TemplateUtil": {
               "$path": "src/client/utils/_TemplateUtil.luau"
             },
