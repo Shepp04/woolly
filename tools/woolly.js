@@ -11,6 +11,12 @@ const fs = require("fs");
 const path = require("path");
 const cp  = require("child_process");
 
+// Where classes live by default
+const CLASS_DIRS = {
+  shared: "src/shared/classes",
+  server: "src/server/classes",
+};
+
 // ---------- utils ----------
 const toPascal = (s) => {
   if (!s) return s;
@@ -236,6 +242,184 @@ local DataTypeDict: DataTypeDict = {
 return DataTypeDict
 `;
 
+// ---- class templates ----
+function tmplSharedClass(name) {
+  return `--!strict
+-- ${name} (Shared Class)
+-- Reusable logic for both server & client. DI makes it easy to pass Config/GameData/etc.
+
+--[=[
+USAGE (client or server):
+  local ${name} = require(ReplicatedStorage.Shared.Classes.${name})
+  local inst = ${name}.new({
+      Config = require(ReplicatedStorage.Shared.Config),
+      GameData = require(ReplicatedStorage.Shared.GameData),
+      Monetisation = require(ReplicatedStorage.Shared.Monetisation),
+  }, {
+      -- opts for this instance
+      id = "Foo",
+  })
+  inst:Init()
+  -- ...
+  inst:Destroy()
+]=]
+
+-- // Services
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+export type Deps = {
+  Config: any?,
+  GameData: any?,
+  Monetisation: any?,
+  -- add more shared deps as needed
+}
+
+export type ${name} = {
+  _deps: Deps,
+  _opts: { [string]: any },
+  _conns: { RBXScriptConnection },
+
+  Init: (self: ${name}) -> (),
+  Destroy: (self: ${name}) -> (),
+
+  -- example shared API
+  FormatCurrency: (self: ${name}, currencyId: string, amount: number) -> string,
+}
+
+local ${name} = {}
+${name}.__index = ${name}
+
+function ${name}.new(deps: Deps, opts: { [string]: any }?): ${name}
+  local self = setmetatable({
+    _deps = deps or {},
+    _opts = opts or {},
+    _conns = {},
+  }, ${name})
+
+  return self
+end
+
+function ${name}:Init()
+  -- Hook Bindables/Remotes conditionally:
+  if RunService:IsClient() then
+    -- client-only wiring
+  else
+    -- server-only wiring
+  end
+end
+
+function ${name}:FormatCurrency(currencyId: string, amount: number): string
+  local Config = self._deps.Config
+  if Config and Config.Currency and Config.Currency.GetCurrencyText then
+    return Config.Currency:GetCurrencyText(currencyId, amount)
+  end
+  return tostring(amount) .. " " .. currencyId
+end
+
+function ${name}:Destroy()
+  for _, c in self._conns do
+    pcall(function() c:Disconnect() end)
+  end
+  table.clear(self._conns)
+end
+
+return ${name}
+`;
+}
+
+function tmplServerClass(name) {
+  return `--!strict
+-- ${name} (Server Class)
+-- Dependency-injected helper owned by Services or other classes.
+
+--[=[
+USAGE (inside a Service):
+  local ${name} = require(script.Parent.Classes.${name})
+  local inst = ${name}.new({
+      Services = self.Services, -- from Services registry
+      Config = require(ReplicatedStorage.Shared.Config),
+      -- any other server deps...
+  }, {
+      -- opts for this instance
+      id = "Stand01",
+  })
+  inst:Init()
+
+  -- later
+  inst:Destroy()
+]=]
+
+-- // Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- // Types
+-- If you have a typed Services registry:
+-- local Types = require(ReplicatedStorage.Shared.Types.Services)
+-- type ServicesRegistry = Types.Registry
+
+export type Deps = {
+  Services: any, -- recommend narrowing to \`ServicesRegistry\` if you have it
+  Config: any?,
+  GameData: any?,
+}
+
+export type ${name} = {
+  _deps: Deps,
+  _opts: { [string]: any },
+  _conns: { RBXScriptConnection },
+
+  Init: (self: ${name}) -> (),
+  Destroy: (self: ${name}) -> (),
+
+  -- example public API
+  Spend: (self: ${name}, player: Player, currencyId: string, amount: number) -> boolean,
+}
+
+local ${name} = {}
+${name}.__index = ${name}
+
+function ${name}.new(deps: Deps, opts: { [string]: any }?): ${name}
+  assert(deps ~= nil, "${name}.new => deps is required")
+  assert(deps.Services ~= nil, "${name}.new => deps.Services is required")
+
+  local self = setmetatable({
+    _deps = deps,
+    _opts = opts or {},
+    _conns = {},
+  }, ${name})
+
+  return self
+end
+
+function ${name}:Init()
+  -- Example: pull frequently used services once
+  -- local CurrencyService = (self._deps.Services :: any).CurrencyService
+
+  -- Bind events here and store connections in self._conns
+  -- table.insert(self._conns, someSignal:Connect(function() ... end))
+end
+
+function ${name}:Spend(player: Player, currencyId: string, amount: number): boolean
+  local CurrencyService = (self._deps.Services :: any).CurrencyService
+  if not CurrencyService then
+    warn("[${name}] CurrencyService not available")
+    return false
+  end
+  return CurrencyService:SpendCurrency(player, currencyId, amount)
+end
+
+function ${name}:Destroy()
+  for _, c in self._conns do
+    pcall(function() c:Disconnect() end)
+  end
+  table.clear(self._conns)
+end
+
+return ${name}
+`;
+}
+
 // ---------- creators ----------
 function createService(name, parent) {
   const pas = toPascal(name);
@@ -268,6 +452,7 @@ function createSystem(name, parent) {
   // server
   ensureDir(path.join(base, "server/services"));
   ensureDir(path.join(base, "server/packages"));
+  ensureDir(path.join(base, "server/classes"));
 
   // client
   const controllersDir = path.join(base, "client/controllers");
@@ -279,6 +464,7 @@ function createSystem(name, parent) {
   // shared
   ensureDir(path.join(base, "shared/assets/ui"));
   ensureDir(path.join(base, "shared/assets/models"));
+  ensureDir(path.join(base, "shared/classes"));
   const cfgDir = path.join(base, "shared/config");
   ensureDir(cfgDir);
 
@@ -293,6 +479,26 @@ function createDataType(name) {
   return created ? [file] : [];
 }
 
+function createSharedClass(rawName, systemName /* optional */) {
+  const pas = toPascal(rawName);
+  const baseDir = systemName
+    ? path.join("src/_systems", systemName, "shared/classes")
+    : CLASS_DIRS.shared;
+  const abs = path.join(baseDir, `${pas}.luau`);
+  writeIfMissing(abs, tmplSharedClass(pas));
+  return abs;
+}
+
+function createServerClass(rawName, systemName /* optional */) {
+  const pas = toPascal(rawName);
+  const baseDir = systemName
+    ? path.join("src/_systems", systemName, "server/classes")
+    : CLASS_DIRS.server;
+  const abs = path.join(baseDir, `${pas}.luau`);
+  writeIfMissing(abs, tmplServerClass(pas));
+  return abs;
+}
+
 // ---------- parse args ----------
 const args = process.argv.slice(2);
 const [cmd, kind, rawName, ...rest] = args;
@@ -303,10 +509,15 @@ const parentDir = atFlagIdx >= 0 ? rest[atFlagIdx + 1] : undefined;
 function usage() {
   console.log(`
 Woolly CLI
-  create service <Name>      [--at <dir>]  # default src/server/services
-  create controller <Name>   [--at <dir>]  # default src/client/controllers
-  create component <Name>    [--at <dir>]  # default src/client/components
-  create system <Name>       [--at <dir>]  # default src/_systems
+
+  create service <Name>        [--at <dir>]           # default src/server/services
+  create controller <Name>     [--at <dir>]           # default src/client/controllers
+  create component <Name>      [--at <dir>]           # default src/client/components
+  create system <Name>         [--at <dir>]           # default src/_systems
+  create data_type <Name>                             # default src/_game_data/source/data_types
+  create class <Name>          (--target shared|server | --both) [--system <SysName>]
+                              # shared -> src/shared/classes or src/_systems/<Sys>/shared/classes
+                              # server -> src/server/classes or src/_systems/<Sys>/server/classes
 `);
 }
 
@@ -326,27 +537,76 @@ if (!kind || !rawName) {
   process.exit(1);
 }
 
+// ---- tiny flag parser for class options ----
+let target = null;        // "shared" | "server"
+let both = false;
+let system = null;
+
+for (let i = 0; i < rest.length; i++) {
+  const a = rest[i];
+  if (a === "--both") {
+    both = true;
+  } else if ((a === "--target" || a === "-t") && rest[i + 1]) {
+    target = rest[++i];
+  } else if (a === "--system" && rest[i + 1]) {
+    system = rest[++i];
+  }
+}
+
+// normalize helper: make sure we always have an array of file paths
+const toArray = (v) =>
+  v == null ? [] : Array.isArray(v) ? v : [v];
+
 let created = [];
+
 switch (kind) {
-  case "service":
-    created = createService(rawName, parentDir);    break;
+  case "service": {
+    created = toArray(createService(rawName, parentDir));
     break;
-  case "controller":
-    created = createController(rawName, parentDir); break;
+  }
+  case "controller": {
+    created = toArray(createController(rawName, parentDir));
     break;
-  case "component":
-    created = createComponent(rawName, parentDir);  break;
+  }
+  case "component": {
+    created = toArray(createComponent(rawName, parentDir));
     break;
-  case "system":
-    created = createSystem(rawName, parentDir);     break;
+  }
+  case "system": {
+    created = toArray(createSystem(rawName, parentDir));
     break;
-  case "data_type":
-    created = createDataType(rawName);
+  }
+  case "data_type": {
+    created = toArray(createDataType(rawName));
     break;
-  default:
+  }
+  case "class": {
+    const made = [];
+
+    // If no --target and not --both, fail fast with a helpful message
+    if (!both && target !== "shared" && target !== "server") {
+      console.error("Please specify --target shared|server or use --both");
+      process.exit(1);
+    }
+
+    // Let creators handle default dirs if system is null/undefined
+    if (both || target === "shared") {
+      const p = createSharedClass(rawName, system || undefined);
+      if (p) made.push(p);
+    }
+    if (both || target === "server") {
+      const p = createServerClass(rawName, system || undefined);
+      if (p) made.push(p);
+    }
+
+    created = made;
+    break;
+  }
+  default: {
     console.error("Unknown kind:", kind);
     usage();
     process.exit(1);
+  }
 }
 
 // Auto-open the first created file if any

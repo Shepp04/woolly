@@ -95,6 +95,22 @@ function mirrorFolderAsModules(destParent, srcDir) {
   }
 }
 
+// Copy .lua/.luau recursively into a destination folder node,
+// IGNORING folder-backed init.* (i.e., never promoting folders to ModuleScript).
+function mirrorFolderAsPlainModules(destParent, srcDir) {
+  if (!isDir(srcDir)) return;
+
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const full = path.join(srcDir, entry.name);
+    if (entry.isDirectory()) {
+      const node = ensureFolder(destParent, toPascal(entry.name));
+      mirrorFolderAsPlainModules(node, full);
+    } else if (entry.isFile() && LU(entry.name)) {
+      addFile(destParent, stripExt(entry.name), full);
+    }
+  }
+}
+
 // Mount a “section” that may be folder-backed or a plain folder
 function mountSection(parent, nodeName, absDir) {
   if (!isDir(absDir)) return; // nothing to mount
@@ -217,6 +233,10 @@ const clientUtils       = clientRoot.Utils;
   // Shared/Monetisation (folder-backed) ← src/_monetisation/resolver/
   addFolderModule(sharedRoot, "Monetisation", path.join(MON_ROOT, "resolver"));
 
+  // Shared/Classes (always a folder)
+  const sharedClasses = ensureFolder(sharedRoot, "Classes");
+  mirrorFolderAsPlainModules(sharedClasses, path.join(SRC_SHARED, "classes"));
+
   // Shared/Assets/UI + Models
   const assetsFolder = ensureFolder(sharedRoot, "Assets");
   const assetsUI = ensureFolder(assetsFolder, "UI");
@@ -235,6 +255,10 @@ const clientUtils       = clientRoot.Utils;
   addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
   addFolderModule(serverRoot, "GameDataMaster", path.join(GD_ROOT, "source"));
   addFolderModule(serverRoot, "Monetisation", path.join(MON_ROOT, "source"));
+
+  // Server/Classes (always a Folder)
+  const serverClasses = ensureFolder(serverRoot, "Classes");
+  mirrorFolderAsPlainModules(serverClasses, path.join(SRC_SERVER, "classes"));
 })();
 
 // ==== 3) Core client ====
@@ -248,7 +272,6 @@ const clientUtils       = clientRoot.Utils;
   mountSection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"));
 })();
 
-// ==== 4) Systems merge ====
 // ==== 4) Systems merge ====
 (function mergeSystems() {
   if (!isDir(SYS_ROOT)) return;
@@ -267,6 +290,10 @@ const clientUtils       = clientRoot.Utils;
   const clientControllers = clientRoot.Controllers;
   const clientComponents  = clientRoot.Components;
   const clientUtils       = clientRoot.Utils;
+
+  // Prepare shared/server Classes folders once
+  const sharedClasses = ensureFolder(sharedRoot, "Classes");
+  const serverClasses = ensureFolder(serverRoot, "Classes");
 
   for (const sysName of fs.readdirSync(SYS_ROOT)) {
     const sysDir = path.join(SYS_ROOT, sysName);
@@ -288,6 +315,9 @@ const clientUtils       = clientRoot.Utils;
 
       if (!serverRoot.Packages) addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
       if (serverRoot.Packages)  mergeSystemLeaf(serverRoot.Packages, path.join(sRoot, "packages"));
+    
+      const sysServerClasses = path.join(sRoot, "classes");
+      mirrorFolderAsPlainModules(serverClasses, sysServerClasses);
     }
 
     // shared assets/config (unchanged)
@@ -298,6 +328,9 @@ const clientUtils       = clientRoot.Utils;
 
       if (!sharedRoot.Config) addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
       if (sharedRoot.Config)  mergeSystemLeaf(sharedRoot.Config, path.join(shRoot, "config"));
+    
+      const sysSharedClasses = path.join(shRoot, "classes");
+      mirrorFolderAsPlainModules(sharedClasses, sysSharedClasses);
     }
   }
 })();
