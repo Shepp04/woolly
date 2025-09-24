@@ -20,6 +20,7 @@ local deps = {
     SharedPackages = require(ReplicatedStorage.Shared.Packages),
     GameData = require(ReplicatedStorage.Shared.GameData),
     Monetisation = require(ReplicatedStorage.Shared.Monetisation),
+    Config = require(ReplicatedStorage.Shared.Config),
 }
 
 local Services = require(ServerScriptService.Server.Services)

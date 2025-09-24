@@ -8,6 +8,15 @@ This framework requires Rojo - see Rojo's docs here: [rojo docs](https://rojo.sp
 
 To create a new project, clone this repository and run:
 ```
+npm run setup
+```
+
+<details>
+<summary> For older versions of this framework (0.1.2 and earlier), expand this dropdown.</summary>
+
+
+To setup, run:
+```
 wally install
 ```
 This will install the necessary dependencies (Promise, Trove etc.) and put them in the /Packages directory.
@@ -26,6 +35,7 @@ to regenerate the `default.project.json` file, and then run
 rojo serve
 ```
 to re-sync to Studio.
+</details>
 
 ---
 
