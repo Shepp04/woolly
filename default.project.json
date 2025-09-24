@@ -23,6 +23,12 @@
         "Monetisation": {
           "$path": "src/_monetisation/resolver"
         },
+        "Classes": {
+          "$className": "Folder",
+          "DoorClass": {
+            "$path": "src/_systems/TestSystem/shared/classes/DoorClass.luau"
+          }
+        },
         "Assets": {
           "$className": "Folder",
           "UI": {
@@ -63,6 +69,12 @@
         },
         "Monetisation": {
           "$path": "src/_monetisation/source"
+        },
+        "Classes": {
+          "$className": "Folder",
+          "DoorClass": {
+            "$path": "src/_systems/TestSystem/server/classes/DoorClass.luau"
+          }
         }
       }
     },
@@ -81,9 +93,6 @@
           },
           "Components": {
             "$className": "Folder",
-            "ProductShop": {
-              "$path": "src/client/components/ProductShop.luau"
-            },
             "_TemplateComponent": {
               "$path": "src/client/components/_TemplateComponent.luau"
             },
