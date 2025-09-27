@@ -69,6 +69,12 @@ function sourceRootFor(place) {
 const run = (cmd, args, opts = {}) =>
   cp.spawnSync(cmd, args, { stdio: "inherit", cwd: REPO, ...opts });
 
+function tryRun(cmd, args, opts = {}) {
+  console.log(`→ ${cmd} ${args.join(" ")}`);
+  const res = cp.spawnSync(cmd, args, { stdio: "inherit", cwd: REPO, ...opts  });
+  return res.status;
+}
+
 function openInEditor(absPath) {
   try {
     const which = cp.spawnSync(process.platform === "win32" ? "where" : "which", ["code"], { stdio: "ignore" });
@@ -98,6 +104,27 @@ const writeIfMissing = (abs, content) => {
   console.log("✓ wrote  ", abs);
   return true;
 };
+
+function ensurePlaceSkeleton(place) {
+  const base = path.join(OVERRIDES_DIR, place);
+
+  // shared
+  ensureDir(path.join(base, "shared/assets/ui"));
+  ensureDir(path.join(base, "shared/assets/models"));
+  ensureDir(path.join(base, "shared/classes"));
+  ensureDir(path.join(base, "shared/config"));
+  ensureDir(path.join(base, "shared/packages"));
+
+  // client
+  ensureDir(path.join(base, "client/controllers"));
+  ensureDir(path.join(base, "client/components"));
+  ensureDir(path.join(base, "client/utils"));
+
+  // server
+  ensureDir(path.join(base, "server/services"));
+  ensureDir(path.join(base, "server/packages"));
+  ensureDir(path.join(base, "server/classes"));
+}
 
 const toPascal = (s) => {
   if (!s) return s;
@@ -510,6 +537,8 @@ function usage() {
   console.log(`
 Woolly CLI
 
+  setup [Place]           Install deps, generate project, build, then serve
+
   gen [Place]             Generate places/<Place>.project.json (default: current place)
   serve [Place]           Run 'rojo serve' for that place
   build [Place]           Build 'builds/<Place>.rbxl' for that place
@@ -544,6 +573,43 @@ function hasFlag(name) { return rest.includes(name); }
 if (!cmd || cmd === "--help" || cmd === "-h") {
   usage();
   process.exit(0);
+}
+
+if (cmd === "setup") {
+  // Default to current place if not provided
+  const place = resolvePlace(sub);
+
+  // Make sure place_overrides/<Place> exists with expected folders
+  ensurePlaceSkeleton(place);
+
+  // 1) wally install
+  let code = tryRun("wally", ["install"]);
+  if (code !== 0) {
+    console.warn("⚠ wally install failed or wally not found. Continuing anyway...");
+  }
+
+  // 2) rokit install (ok if missing rokit.toml or rokit not installed)
+  code = tryRun("rokit", ["install"]);
+  if (code !== 0) {
+    console.warn("⚠ rokit install failed (no rokit.toml or rokit not found). Continuing...");
+  }
+
+  // 3) generate project for this place
+  code = tryRun("node", ["tools/genRojoTree.js", place]);
+  if (code !== 0) process.exit(0);
+
+  // 4) build to /builds
+  ensureDir(path.join(REPO, "builds"));
+  const outFile = path.join(REPO, "builds", `${place}.rbxlx`);
+  code = tryRun("rojo", ["build", path.relative(REPO, placeProjectPath(place)), "-o", path.relative(REPO, outFile)]);
+  if (code !== 0) process.exit(code);
+
+  console.log(`✓ Built ${path.relative(process.cwd(), outFile)}`);
+
+  // 5) serve
+  console.log("→ Starting rojo serve");
+  code = tryRun("rojo", ["serve", path.relative(REPO, placeProjectPath(place))]);
+  process.exit(code);
 }
 
 if (cmd === "switch") {
