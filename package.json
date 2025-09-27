@@ -2,8 +2,9 @@
     "scripts": {
         "setup": "node tools/bootstrap.js",
         "woolly": "node tools/woolly.js",
-        "gen:rojo": "node tools/genRojoTree.js",
-        "serve": "rojo serve places/MainPlace.project.json",
-        "build": "rojo build places/MainPlace.project.json -o build-main.rbxl"
+
+        "gen": "node tools/woolly.js gen",
+        "serve": "node tools/woolly.js serve",
+        "build": "node tools/woolly.js build"
     }
 }
