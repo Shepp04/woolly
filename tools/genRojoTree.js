@@ -56,6 +56,11 @@ function addFile(parent, nodeName, absPath, className /* optional */) {
   parent[nodeName] = className ? { $className: className, $path: rel } : { $path: rel };
 }
 
+function setFileNode(parent, nodeName, absPath, className /* optional */) {
+  const rel = relFromProject(absPath);
+  parent[nodeName] = className ? { $className: className, $path: rel } : { $path: rel };
+}
+
 function addFolderModule(parent, nodeName, absDir) {
   if (!isDir(absDir) || !hasInit(absDir)) return;
   const relDir = relFromProject(absDir);
@@ -108,9 +113,10 @@ function mirrorAssets(destParent, srcDir) {
 function mergeSystemLeaf(destParent, leafAbs) {
   if (!isDir(leafAbs)) return;
 
+  // If the directory itself is folder-backed, mount/replace whole node
   if (hasInit(leafAbs)) {
     const nodeName = toPascal(path.basename(leafAbs));
-    if (destParent[nodeName]) throw new Error(`[gen] Name collision merging systems: ${nodeName}`);
+    // overlay wins: replace whatever is there
     addFolderModule(destParent, nodeName, leafAbs);
     return;
   }
@@ -120,31 +126,44 @@ function mergeSystemLeaf(destParent, leafAbs) {
     if (entry.isDirectory()) {
       if (hasInit(full)) {
         const nodeName = toPascal(entry.name);
-        if (destParent[nodeName]) throw new Error(`[gen] Name collision merging systems: ${nodeName}`);
+        // overlay wins: replace whatever is there
         addFolderModule(destParent, nodeName, full);
       } else {
-        mergeSystemLeaf(ensureFolder(destParent, toPascal(entry.name)), full);
+        // plain folder -> recurse, creating the folder if needed
+        const node = ensureFolder(destParent, toPascal(entry.name));
+        mergeSystemLeaf(node, full);
       }
     } else if (entry.isFile() && LU(entry.name)) {
       const nodeName = stripExt(entry.name);
-      if (destParent[nodeName]) throw new Error(`[gen] Name collision merging systems: ${nodeName}`);
-      addFile(destParent, nodeName, full);
+      // overlay wins: replace file node
+      setFileNode(destParent, nodeName, full);
+    } else if (entry.isFile() && isModelFile(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      // overlay wins: replace asset node
+      setFileNode(destParent, nodeName, full);
     }
   }
 }
 
 // Helper: mount base, then overlay (overlay wins by name)
 function overlaySection(parent, nodeName, baseAbs, overAbs) {
-  // If overlay exists and is folder-backed, prefer folder-backed replacement
-  if (isDir(overAbs) && hasInit(overAbs)) {
+  const overlayIsFB = isDir(overAbs) && hasInit(overAbs);
+  const baseIsFB    = isDir(baseAbs) && hasInit(baseAbs);
+
+  if (overlayIsFB) {
+    // Overlay provides a folder-backed module: replace entirely
     addFolderModule(parent, nodeName, overAbs);
     return;
   }
 
-  if (hasInit(baseAbs)) addFolderModule(parent, nodeName, baseAbs);
-  else if (isDir(baseAbs)) mirrorFolderAsModules(ensureFolder(parent, nodeName), baseAbs);
+  // Otherwise, mount base (folder-backed or mirrored folder)
+  if (baseIsFB) {
+    addFolderModule(parent, nodeName, baseAbs);
+  } else if (isDir(baseAbs)) {
+    mirrorFolderAsModules(ensureFolder(parent, nodeName), baseAbs);
+  }
 
-  // Merge overlay content into the (possibly created) node
+  // Now merge overlay *files/folders* in, letting overlay replace conflicts
   if (isDir(overAbs)) {
     const target = ensureFolder(parent, nodeName);
     mergeSystemLeaf(target, overAbs);
