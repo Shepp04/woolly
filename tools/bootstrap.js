@@ -8,8 +8,8 @@ const STEPS = [
   { cmd: "rokit", args: ["install"],        when: () => true }, // harmless if no rokit.toml
   { cmd: "node",  args: ["tools/genRojoTree.js"], when: () => true },
   // rojo init is *not* needed if you generate default.project.json yourself
-  { cmd: "rojo",  args: ["build", "-o", "build.rbxlx"], when: () => true },
-  { cmd: "rojo",  args: ["serve"],          when: () => true }, // blocks; runs last
+  { cmd: "rojo",  args: ["build", "places/MainPlace.project.json", "-o", "build-main.rbxlx"], when: () => true },
+  { cmd: "rojo",  args: ["serve", "places/MainPlace.project.json"],          when: () => true }, // blocks; runs last
 ];
 
 function runStep(i = 0) {
