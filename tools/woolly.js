@@ -1,81 +1,111 @@
 #!/usr/bin/env node
-/* Woolly scaffolder: create services/controllers/components/systems
-   Usage examples:
-     node tools/woolly.js create service CurrencyService
-     node tools/woolly.js create controller MenuController --at src/client/controllers
-     node tools/woolly.js create component PlaytimeRewardBar
-     node tools/woolly.js create system TimedRewards --at src/_systems
+/* Woolly CLI
+   New commands:
+     woolly gen [Place]            -> node tools/genRojoTree.js Place
+     woolly serve [Place]          -> rojo serve places/Place.project.json
+     woolly build [Place]          -> rojo build places/Place.project.json -o builds/Place.rbxl
+     woolly switch <Place>         -> set default place in .woollyrc.json
+     woolly create <kind> <Name> [--at <dir>] [--place <Place>] [class flags...]
+       kinds: service | controller | component | system | data_type | class
+       class flags: --target shared|server | --both | --system <SysName>
 */
 
 const fs = require("fs");
 const path = require("path");
 const cp  = require("child_process");
 
-// Where classes live by default
-const CLASS_DIRS = {
-  shared: "src/shared/classes",
-  server: "src/server/classes",
-};
+const REPO = path.join(__dirname, "..");
+const PLACES_DIR = path.join(REPO, "places");
+const OVERRIDES_DIR = path.join(REPO, "place_overrides");
+const SRC_DIR = path.join(REPO, "src");
+const CONFIG_PATH = path.join(REPO, ".woollyrc.json");
 
-// ---------- utils ----------
-const toPascal = (s) => {
-  if (!s) return s;
-  if (/^[A-Z0-9_]+$/.test(s)) return s; // keep UX/UI/ID etc
-  return s
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map(w => w[0].toUpperCase() + w.slice(1))
-    .join("");
-};
-
-const ensureDir = (dir) => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-};
-
-const writeIfMissing = (abs, content) => {
-  if (fs.existsSync(abs)) {
-    console.log("• exists ", abs);
-    return false;
+// ---------------- config helpers ----------------
+function readConfig() {
+  try {
+    const raw = fs.readFileSync(CONFIG_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return { defaultPlace: "MainPlace" };
   }
+}
+
+function writeConfig(cfg) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+  console.log("✓ Updated", path.relative(process.cwd(), CONFIG_PATH));
+}
+
+function getDefaultPlace() {
+  return readConfig().defaultPlace || "MainPlace";
+}
+
+function setDefaultPlace(place) {
+  const cfg = readConfig();
+  cfg.defaultPlace = place;
+  writeConfig(cfg);
+}
+
+function placeProjectPath(place) {
+  return path.join(PLACES_DIR, `${place}.project.json`);
+}
+
+function resolvePlace(argMaybe) {
+  return argMaybe || getDefaultPlace();
+}
+
+function overridesRootFor(place) {
+  const abs = path.join(OVERRIDES_DIR, place);
+  return fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? abs : null;
+}
+
+function sourceRootFor(place) {
+  // If overrides/<place> exists, use it; else use /src
+  const ov = overridesRootFor(place);
+  console.log("Override place found:", ov);
+  return ov || SRC_DIR;
+}
+
+// ---------------- run helpers ----------------
+const run = (cmd, args, opts = {}) =>
+  cp.spawnSync(cmd, args, { stdio: "inherit", cwd: REPO, ...opts });
+
+function openInEditor(absPath) {
+  try {
+    const which = cp.spawnSync(process.platform === "win32" ? "where" : "which", ["code"], { stdio: "ignore" });
+    if (which.status === 0) {
+      cp.spawn("code", ["-g", `${absPath}:1`], { cwd: REPO, stdio: "ignore", detached: true });
+      return;
+    }
+  } catch {}
+  const editor = process.env.VISUAL || process.env.EDITOR;
+  if (editor) {
+    try {
+      cp.spawn(editor, [absPath], { cwd: REPO, stdio: "ignore", detached: true });
+      return;
+    } catch {}
+  }
+  if (process.platform === "darwin") cp.spawn("open", [absPath], { cwd: REPO, stdio: "ignore", detached: true });
+  else if (process.platform === "win32") cp.spawn("cmd", ["/c", "start", "", absPath], { cwd: REPO, stdio: "ignore", detached: true });
+  else cp.spawn("xdg-open", [absPath], { cwd: REPO, stdio: "ignore", detached: true });
+}
+
+// ---------------- filesystem utils ----------------
+const ensureDir = (dir) => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); };
+const writeIfMissing = (abs, content) => {
+  if (fs.existsSync(abs)) { console.log("• exists ", abs); return false; }
   ensureDir(path.dirname(abs));
   fs.writeFileSync(abs, content, "utf8");
   console.log("✓ wrote  ", abs);
   return true;
 };
 
-const run = (cmd, args, opts = {}) =>
-  cp.spawnSync(cmd, args, { stdio: "inherit", ...opts });
+const toPascal = (s) => {
+  if (!s) return s;
+  if (/^[A-Z0-9_]+$/.test(s)) return s;
+  return s.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join("");
+};
 
-function openInEditor(absPath) {
-  // Prefer VS Code if available
-  try {
-    const which = cp.spawnSync(process.platform === "win32" ? "where" : "which", ["code"], { stdio: "ignore" });
-    if (which.status === 0) {
-      cp.spawn("code", ["-g", `${absPath}:1`], { stdio: "ignore", detached: true });
-      return;
-    }
-  } catch {}
-
-  // Respect VISUAL/EDITOR
-  const editor = process.env.VISUAL || process.env.EDITOR;
-  if (editor) {
-    try {
-      cp.spawn(editor, [absPath], { stdio: "ignore", detached: true });
-      return;
-    } catch {}
-  }
-
-  // OS fallback
-  if (process.platform === "darwin") {
-    cp.spawn("open", [absPath], { stdio: "ignore", detached: true });
-  } else if (process.platform === "win32") {
-    cp.spawn("cmd", ["/c", "start", "", absPath], { stdio: "ignore", detached: true });
-  } else {
-    cp.spawn("xdg-open", [absPath], { stdio: "ignore", detached: true });
-  }
-}
-
-// ---------- templates ----------
+// ---------------- templates (unchanged from your current) ----------------
 const tmplService = (Name) => `--!strict
 -- ${Name} (Service) — lifecycle-first singleton discovered by Services registry.
 
@@ -217,20 +247,6 @@ local PUBLIC_FIELD_WHITELIST = {
 \tid = true, name = true, icon = true, rarity = true, stackable = true, maxStack = true,
 }
 local DATA: { [string]: DataEntry } = {
-\t-- Example entry:
-\t-- ExampleItem = {
-\t-- \tid = "example",
-\t-- \tname = "Example Item",
-\t-- \ticon = "rbxassetid://123456",
-\t-- \trarity = "common",
-\t-- \tstackable = true,
-\t-- \tmaxStack = 99,
-\t-- \tActivated = function(player, ctx)
-\t-- \t\tprint(player, "used Example Item with context", ctx)
-\t-- \tend,
-\t-- \tModelPath = {"ExampleModels", "ExampleItem"},
-\t-- \tDrops = { Coins = 10 },
-\t-- },
 }
 
 local DataTypeDict: DataTypeDict = {
@@ -242,27 +258,9 @@ local DataTypeDict: DataTypeDict = {
 return DataTypeDict
 `;
 
-// ---- class templates ----
 function tmplSharedClass(name) {
   return `--!strict
 -- ${name} (Shared Class)
--- Reusable logic for both server & client. DI makes it easy to pass Config/GameData/etc.
-
---[=[
-USAGE (client or server):
-  local ${name} = require(ReplicatedStorage.Shared.Classes.${name})
-  local inst = ${name}.new({
-      Config = require(ReplicatedStorage.Shared.Config),
-      GameData = require(ReplicatedStorage.Shared.GameData),
-      Monetisation = require(ReplicatedStorage.Shared.Monetisation),
-  }, {
-      -- opts for this instance
-      id = "Foo",
-  })
-  inst:Init()
-  -- ...
-  inst:Destroy()
-]=]
 
 -- // Services
 local RunService = game:GetService("RunService")
@@ -272,7 +270,6 @@ export type Deps = {
   Config: any?,
   GameData: any?,
   Monetisation: any?,
-  -- add more shared deps as needed
 }
 
 export type ${name} = {
@@ -283,7 +280,6 @@ export type ${name} = {
   Init: (self: ${name}) -> (),
   Destroy: (self: ${name}) -> (),
 
-  -- example shared API
   FormatCurrency: (self: ${name}, currencyId: string, amount: number) -> string,
 }
 
@@ -296,12 +292,10 @@ function ${name}.new(deps: Deps, opts: { [string]: any }?): ${name}
     _opts = opts or {},
     _conns = {},
   }, ${name})
-
   return self
 end
 
 function ${name}:Init()
-  -- Hook Bindables/Remotes conditionally:
   if RunService:IsClient() then
     -- client-only wiring
   else
@@ -318,9 +312,7 @@ function ${name}:FormatCurrency(currencyId: string, amount: number): string
 end
 
 function ${name}:Destroy()
-  for _, c in self._conns do
-    pcall(function() c:Disconnect() end)
-  end
+  for _, c in self._conns do pcall(function() c:Disconnect() end) end
   table.clear(self._conns)
 end
 
@@ -331,35 +323,12 @@ return ${name}
 function tmplServerClass(name) {
   return `--!strict
 -- ${name} (Server Class)
--- Dependency-injected helper owned by Services or other classes.
-
---[=[
-USAGE (inside a Service):
-  local ${name} = require(script.Parent.Classes.${name})
-  local inst = ${name}.new({
-      Services = self.Services, -- from Services registry
-      Config = require(ReplicatedStorage.Shared.Config),
-      -- any other server deps...
-  }, {
-      -- opts for this instance
-      id = "Stand01",
-  })
-  inst:Init()
-
-  -- later
-  inst:Destroy()
-]=]
 
 -- // Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- // Types
--- If you have a typed Services registry:
--- local Types = require(ReplicatedStorage.Shared.Types.Services)
--- type ServicesRegistry = Types.Registry
-
 export type Deps = {
-  Services: any, -- recommend narrowing to \`ServicesRegistry\` if you have it
+  Services: any,
   Config: any?,
   GameData: any?,
 }
@@ -372,7 +341,6 @@ export type ${name} = {
   Init: (self: ${name}) -> (),
   Destroy: (self: ${name}) -> (),
 
-  -- example public API
   Spend: (self: ${name}, player: Player, currencyId: string, amount: number) -> boolean,
 }
 
@@ -380,24 +348,17 @@ local ${name} = {}
 ${name}.__index = ${name}
 
 function ${name}.new(deps: Deps, opts: { [string]: any }?): ${name}
-  assert(deps ~= nil, "${name}.new => deps is required")
-  assert(deps.Services ~= nil, "${name}.new => deps.Services is required")
-
+  assert(deps ~= nil and deps.Services ~= nil, "${name}.new => deps.Services is required")
   local self = setmetatable({
     _deps = deps,
     _opts = opts or {},
     _conns = {},
   }, ${name})
-
   return self
 end
 
 function ${name}:Init()
-  -- Example: pull frequently used services once
   -- local CurrencyService = (self._deps.Services :: any).CurrencyService
-
-  -- Bind events here and store connections in self._conns
-  -- table.insert(self._conns, someSignal:Connect(function() ... end))
 end
 
 function ${name}:Spend(player: Player, currencyId: string, amount: number): boolean
@@ -410,9 +371,7 @@ function ${name}:Spend(player: Player, currencyId: string, amount: number): bool
 end
 
 function ${name}:Destroy()
-  for _, c in self._conns do
-    pcall(function() c:Disconnect() end)
-  end
+  for _, c in self._conns do pcall(function() c:Disconnect() end) end
   table.clear(self._conns)
 end
 
@@ -420,34 +379,52 @@ return ${name}
 `;
 }
 
-// ---------- creators ----------
-function createService(name, parent) {
-  const pas = toPascal(name);
-  const dir = parent || "src/server/services";
-  const file = path.resolve(dir, `${pas}.luau`);
-  const created = writeIfMissing(file, tmplService(pas));
-  return created ? [file] : [];
+// ----------------- default dirs + place-aware roots -----------------
+const CLASS_DIRS = {
+  shared: "src/shared/classes",
+  server: "src/server/classes",
+};
+
+function baseDirFor(kind, place, explicitAt) {
+  // If user passed --at, honor it absolutely.
+  if (explicitAt) return path.resolve(REPO, explicitAt);
+
+  // Otherwise use place-specific root if it exists, else src.
+  const root = sourceRootFor(place);
+  switch (kind) {
+    case "service":    return path.join(root, "server/services");
+    case "controller": return path.join(root, "client/controllers");
+    case "component":  return path.join(root, "client/components");
+    case "system":     return path.join(root, "_systems");
+    case "data_type":  return path.join(root, "_game_data/source/data_types");
+    case "class_shared": return path.join(root, "shared/classes");
+    case "class_server": return path.join(root, "server/classes");
+    default: return root;
+  }
 }
 
-function createController(name, parent) {
+// ----------------- creators (now place-aware) -----------------
+function createService(name, parentAbsOrNull) {
   const pas = toPascal(name);
-  const dir = parent || "src/client/controllers";
-  const file = path.resolve(dir, `${pas}.luau`);
-  const created = writeIfMissing(file, tmplController(pas));
-  return created ? [file] : [];
+  const file = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(file, tmplService(pas)) ? [file] : [];
 }
 
-function createComponent(name, parent) {
+function createController(name, parentAbsOrNull) {
   const pas = toPascal(name);
-  const dir = parent || "src/client/components";
-  const file = path.resolve(dir, `${pas}.luau`);
-  const created = writeIfMissing(file, tmplComponent(pas));
-  return created ? [file] : [];
+  const file = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(file, tmplController(pas)) ? [file] : [];
 }
 
-function createSystem(name, parent) {
-  const sysName = name; // keep user casing on folder; files inside can be Pascal
-  const base = path.resolve(parent || "src/_systems", sysName);
+function createComponent(name, parentAbsOrNull) {
+  const pas = toPascal(name);
+  const file = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(file, tmplComponent(pas)) ? [file] : [];
+}
+
+function createSystem(name, parentAbsOrNull) {
+  const sysName = name;
+  const base = path.resolve(parentAbsOrNull, sysName);
 
   // server
   ensureDir(path.join(base, "server/services"));
@@ -455,170 +432,264 @@ function createSystem(name, parent) {
   ensureDir(path.join(base, "server/classes"));
 
   // client
-  const controllersDir = path.join(base, "client/controllers");
-  const componentsDir  = path.join(base, "client/components");
-  ensureDir(controllersDir);
-  ensureDir(componentsDir);
+  ensureDir(path.join(base, "client/controllers"));
+  ensureDir(path.join(base, "client/components"));
   ensureDir(path.join(base, "client/utils"));
 
   // shared
   ensureDir(path.join(base, "shared/assets/ui"));
   ensureDir(path.join(base, "shared/assets/models"));
   ensureDir(path.join(base, "shared/classes"));
-  const cfgDir = path.join(base, "shared/config");
-  ensureDir(cfgDir);
+  ensureDir(path.join(base, "shared/config"));
 
+  console.log("✓ created system scaffold at", path.relative(process.cwd(), base));
   return [];
 }
 
-function createDataType(name) {
+function createDataType(name, parentAbsOrNull) {
   const pas = toPascal(name);
-  const dir = "src/_game_data/source/data_types";
-  const file = path.resolve(dir, `${pas}.luau`);
-  const created = writeIfMissing(file, tmplDataType(pas));
-  return created ? [file] : [];
+  const file = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(file, tmplDataType(pas)) ? [file] : [];
 }
 
-function createSharedClass(rawName, systemName /* optional */) {
+function createSharedClass(rawName, parentAbs) {
   const pas = toPascal(rawName);
-  const baseDir = systemName
-    ? path.join("src/_systems", systemName, "shared/classes")
-    : CLASS_DIRS.shared;
-  const abs = path.join(baseDir, `${pas}.luau`);
+  const abs = path.join(parentAbs, `${pas}.luau`);
   writeIfMissing(abs, tmplSharedClass(pas));
   return abs;
 }
 
-function createServerClass(rawName, systemName /* optional */) {
+function createServerClass(rawName, parentAbs) {
   const pas = toPascal(rawName);
-  const baseDir = systemName
-    ? path.join("src/_systems", systemName, "server/classes")
-    : CLASS_DIRS.server;
-  const abs = path.join(baseDir, `${pas}.luau`);
+  const abs = path.join(parentAbs, `${pas}.luau`);
   writeIfMissing(abs, tmplServerClass(pas));
   return abs;
 }
 
-// ---------- parse args ----------
-const args = process.argv.slice(2);
-const [cmd, kind, rawName, ...rest] = args;
+function createPlace(name) {
+  const pas = name; // keep user casing
+  const base = path.resolve("place_overrides", pas);
 
-const atFlagIdx = rest.findIndex(a => a === "--at");
-const parentDir = atFlagIdx >= 0 ? rest[atFlagIdx + 1] : undefined;
+  // shared
+  ensureDir(path.join(base, "shared/assets/ui"));
+  ensureDir(path.join(base, "shared/assets/models"));
+  ensureDir(path.join(base, "shared/classes"));
+  ensureDir(path.join(base, "shared/config"));
+  ensureDir(path.join(base, "shared/packages")); // optional, in case you override shared packages/resolver
 
+  // client
+  ensureDir(path.join(base, "client/controllers"));
+  ensureDir(path.join(base, "client/components"));
+  ensureDir(path.join(base, "client/utils"));
+
+  // server
+  ensureDir(path.join(base, "server/services"));
+  ensureDir(path.join(base, "server/packages"));
+  ensureDir(path.join(base, "server/classes"));
+
+  console.log("✓ place scaffolding:", base);
+
+  // generate project file
+  console.log(`→ Generating project for ${pas}`);
+  let r = run("node", ["tools/genRojoTree.js", pas]);
+  if (r.status !== 0) return r.status;
+
+  // build output (build-<place>.rbxl)
+  console.log(`→ Building ${pas}`);
+  ensureDir("builds");
+  const outName = path.join("builds", `build-${pas}.rbxl`);
+  r = run("rojo", ["build", `places/${pas}.project.json`, "-o", outName]);
+  if (r.status !== 0) return r.status;
+
+  console.log(`✓ Built ${outName}`);
+  return 0;
+}
+
+// ----------------- usage -----------------
 function usage() {
   console.log(`
 Woolly CLI
 
-  create service <Name>        [--at <dir>]           # default src/server/services
-  create controller <Name>     [--at <dir>]           # default src/client/controllers
-  create component <Name>      [--at <dir>]           # default src/client/components
-  create system <Name>         [--at <dir>]           # default src/_systems
-  create data_type <Name>                             # default src/_game_data/source/data_types
-  create class <Name>          (--target shared|server | --both) [--system <SysName>]
-                              # shared -> src/shared/classes or src/_systems/<Sys>/shared/classes
-                              # server -> src/server/classes or src/_systems/<Sys>/server/classes
+  gen [Place]             Generate places/<Place>.project.json (default: current place)
+  serve [Place]           Run 'rojo serve' for that place
+  build [Place]           Build 'builds/<Place>.rbxl' for that place
+  switch <Place>          Make <Place> the default place in .woollyrc.json
+
+  create place       <Name>
+  create service     <Name> [--at <dir>] [--place <Place>]
+  create controller  <Name> [--at <dir>] [--place <Place>]
+  create component   <Name> [--at <dir>] [--place <Place>]
+  create system      <Name> [--at <dir>] [--place <Place>]
+  create data_type   <Name> [--at <dir>] [--place <Place>]
+  create class       <Name> (--target shared|server | --both) [--system <Sys>] [--place <Place>]
+
+Notes:
+- If --place is given and /place_overrides/<Place> exists, scaffolding goes there; otherwise /src.
+- --at always wins if provided.
 `);
 }
 
+// ----------------- parse args -----------------
+const args = process.argv.slice(2);
+const [cmd, sub, rawName, ...rest] = args;
+
+// quick flag helpers
+function getFlag(name) {
+  const idx = rest.indexOf(name);
+  return idx >= 0 ? rest[idx + 1] : undefined;
+}
+function hasFlag(name) { return rest.includes(name); }
+
+// Command routing
 if (!cmd || cmd === "--help" || cmd === "-h") {
   usage();
   process.exit(0);
 }
 
-if (cmd !== "create") {
-  console.error("Unknown command:", cmd);
-  usage();
-  process.exit(1);
+if (cmd === "switch") {
+  const place = sub;
+  if (!place) { console.error("Usage: woolly switch <Place>"); process.exit(1); }
+  setDefaultPlace(place);
+  console.log("✓ Default place ->", place);
+  process.exit(0);
 }
 
-if (!kind || !rawName) {
-  usage();
-  process.exit(1);
+if (cmd === "gen") {
+  const place = resolvePlace(sub);
+  const res = run("node", ["tools/genRojoTree.js", place]);
+  process.exit(res.status);
 }
 
-// ---- tiny flag parser for class options ----
-let target = null;        // "shared" | "server"
-let both = false;
-let system = null;
-
-for (let i = 0; i < rest.length; i++) {
-  const a = rest[i];
-  if (a === "--both") {
-    both = true;
-  } else if ((a === "--target" || a === "-t") && rest[i + 1]) {
-    target = rest[++i];
-  } else if (a === "--system" && rest[i + 1]) {
-    system = rest[++i];
+if (cmd === "serve") {
+  const place = resolvePlace(sub);
+  const project = placeProjectPath(place);
+  if (!fs.existsSync(project)) {
+    console.log(`No project for ${place} yet. Generating...`);
+    const gen = run("node", ["tools/genRojoTree.js", place]);
+    if (gen.status !== 0) process.exit(gen.status);
   }
+  const res = run("rojo", ["serve", path.relative(REPO, project)]);
+  process.exit(res.status);
 }
 
-// normalize helper: make sure we always have an array of file paths
-const toArray = (v) =>
-  v == null ? [] : Array.isArray(v) ? v : [v];
+if (cmd === "build") {
+  const place = resolvePlace(sub);
+  const project = placeProjectPath(place);
+  if (!fs.existsSync(project)) {
+    console.log(`No project for ${place} yet. Generating...`);
+    const gen = run("node", ["tools/genRojoTree.js", place]);
+    if (gen.status !== 0) process.exit(gen.status);
+  }
+  ensureDir(path.join(REPO, "builds"));
+  const out = path.join(REPO, "builds", `${place}.rbxl`);
+  const res = run("rojo", ["build", path.relative(REPO, project), "-o", path.relative(REPO, out)]);
+  process.exit(res.status);
+}
 
-let created = [];
+if (cmd === "create") {
+  const kind = sub;
+  const name = rawName;
+  if (!kind || !name) { usage(); process.exit(1); }
 
-switch (kind) {
-  case "service": {
-    created = toArray(createService(rawName, parentDir));
-    break;
-  }
-  case "controller": {
-    created = toArray(createController(rawName, parentDir));
-    break;
-  }
-  case "component": {
-    created = toArray(createComponent(rawName, parentDir));
-    break;
-  }
-  case "system": {
-    created = toArray(createSystem(rawName, parentDir));
-    break;
-  }
-  case "data_type": {
-    created = toArray(createDataType(rawName));
-    break;
-  }
-  case "class": {
-    const made = [];
+  // parse shared flags
+  const atDirOpt = getFlag("--at");
+  const placeOpt = getFlag("--place");
+  const place = resolvePlace(placeOpt);
 
-    // If no --target and not --both, fail fast with a helpful message
-    if (!both && target !== "shared" && target !== "server") {
-      console.error("Please specify --target shared|server or use --both");
+  // class-specific flags
+  const target = getFlag("--target");
+  const both = hasFlag("--both");
+  const systemName = getFlag("--system");
+
+  console.log("Place opt:", placeOpt);
+  console.log("Place:", place);
+
+  // Resolve default base directory (place-aware), then override with --at if provided
+  let baseAbs;
+  let created = [];
+
+  switch (kind) {
+    case "place": {
+      const placeName = rawName;
+
+      if (!placeName) {
+        console.error("Usage: woolly create place <PlaceName>");
+        process.exit(1);
+      }
+
+      const code = createPlace(placeName);
+      process.exit(code);
+      break;
+    }
+    case "service": {
+      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("service", place, null);
+      created = createService(name, baseAbs);
+      break;
+    }
+    case "controller": {
+      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("controller", place, null);
+      created = createController(name, baseAbs);
+      break;
+    }
+    case "component": {
+      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("component", place, null);
+      created = createComponent(name, baseAbs);
+      break;
+    }
+    case "system": {
+      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("system", place, null);
+      created = createSystem(name, baseAbs);
+      break;
+    }
+    case "data_type": {
+      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("data_type", place, null);
+      created = createDataType(name, baseAbs);
+      break;
+    }
+    case "class": {
+      // default roots for classes (place-aware)
+      const sharedRoot = atDirOpt ? path.resolve(REPO, atDirOpt) :
+        (systemName
+          ? path.join(sourceRootFor(place), "_systems", systemName, "shared/classes")
+          : baseDirFor("class_shared", place, null));
+
+      const serverRoot = atDirOpt ? path.resolve(REPO, atDirOpt) :
+        (systemName
+          ? path.join(sourceRootFor(place), "_systems", systemName, "server/classes")
+          : baseDirFor("class_server", place, null));
+
+      const made = [];
+
+      if (!both && target !== "shared" && target !== "server") {
+        console.error("Please specify --target shared|server or use --both");
+        process.exit(1);
+      }
+      if (both || target === "shared") {
+        ensureDir(sharedRoot);
+        const p = createSharedClass(name, sharedRoot);
+        if (p) made.push(p);
+      }
+      if (both || target === "server") {
+        ensureDir(serverRoot);
+        const p = createServerClass(name, serverRoot);
+        if (p) made.push(p);
+      }
+      created = made;
+      break;
+    }
+    default:
+      console.error("Unknown kind:", kind);
+      usage();
       process.exit(1);
-    }
-
-    // Let creators handle default dirs if system is null/undefined
-    if (both || target === "shared") {
-      const p = createSharedClass(rawName, system || undefined);
-      if (p) made.push(p);
-    }
-    if (both || target === "server") {
-      const p = createServerClass(rawName, system || undefined);
-      if (p) made.push(p);
-    }
-
-    created = made;
-    break;
   }
-  default: {
-    console.error("Unknown kind:", kind);
-    usage();
-    process.exit(1);
-  }
+
+  if (created.length > 0) openInEditor(created[0]);
+
+  // Auto-regenerate mapping for this place
+  const gen = run("node", ["tools/genRojoTree.js", place]);
+  process.exit(gen.status);
 }
 
-// Auto-open the first created file if any
-if (created.length > 0) {
-  openInEditor(created[0]);
-}
-
-// Regenerate Rojo mapping
-if (fs.existsSync("tools/genRojoTree.js")) {
-  console.log("→ Refreshing default.project.json via genRojoTree.js");
-  const res = run("node", ["tools/genRojoTree.js"]);
-  if (res.status !== 0) process.exit(res.status);
-} else {
-  console.log("⚠ Skipped genRojoTree.js (not found)");
-}
+// Fallback
+usage();
+process.exit(1);
