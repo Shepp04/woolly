@@ -18,6 +18,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 
 -- // Types
 local Types = require(ReplicatedStorage.Shared.Types.Data)
+type PlayerProfile = Types.PlayerProfile
 
 --// Templates
 local DATA_TEMPLATE = Config.Data.dataTemplate or {}
@@ -25,7 +26,7 @@ local INFO_TEMPLATE = Config.Data.infoTemplate or {}
 
 -- // ProfileStore Setup
 local PlayerStore = ProfileStore.New("PlayerStore", DATA_TEMPLATE)
-local Profiles: { [Player]: Types.PlayerProfile } = {}
+local Profiles: { [Player]: PlayerProfile } = {}
 
 --// Module
 local DataManager = {}
@@ -63,7 +64,7 @@ local function deepReconcile(target: {}, template: {})
 end
 
 -- Initializes a player profile when loaded
-local function onProfileLoad(player: Player, profile: Types.PlayerProfile)
+local function onProfileLoad(player: Player, profile: PlayerProfile)
 	-- Initialise Info
 	profile.Info = deepClone(INFO_TEMPLATE)
 
@@ -94,9 +95,9 @@ end
 
 	@param player Player — The player whose profile to retrieve.
 	@param yield? boolean — If true, waits until the profile is available or the player leaves.
-	@return Types.PlayerProfile? — The player's profile, or nil if unavailable.
+	@return PlayerProfile? — The player's profile, or nil if unavailable.
 ]]
-function DataManager:GetPlayerProfile(player: Player, yield: boolean?): Types.PlayerProfile?
+function DataManager:GetPlayerProfile(player: Player, yield: boolean?): PlayerProfile?
 	if Profiles[player] then
         return Profiles[player]
     end
@@ -159,13 +160,13 @@ end
 	Reconciles a specific section into the player's profile.
 
 	@param player Player — The player whose data is reconciled.
-	@param profile Types.PlayerProfile — The profile being reconciled.
+	@param profile PlayerProfile — The profile being reconciled.
 	@param sectionType "Info" | "Data" — Which section to reconcile.
 	@param sectionName string — The key in the section.
 	@param template table — The template values to fill in.
 	@return boolean — Whether reconciliation was successful.
 ]]
-function DataManager:ReconcileProfileSection(player: Player, profile: Types.PlayerProfile, sectionType: "Info" | "Data", sectionName: string, template: {}): boolean
+function DataManager:ReconcileProfileSection(player: Player, profile: PlayerProfile, sectionType: "Info" | "Data", sectionName: string, template: {}): boolean
 	if not profile then return false end
 
 	if sectionType == "Info" then
@@ -189,9 +190,9 @@ end
 	Reconciles all registered sections into the player's profile.
 
 	@param player Player — The player whose profile is reconciled.
-	@param profile Types.PlayerProfile — The profile to reconcile.
+	@param profile PlayerProfile — The profile to reconcile.
 ]]
-function DataManager:ReconcileAllSections(player: Player, profile: Types.PlayerProfile)
+function DataManager:ReconcileAllSections(player: Player, profile: PlayerProfile)
 	for sectionName, template in pairs(ReconcileSections.Info) do
 		self:ReconcileProfileSection(player, profile, "Info", sectionName, template)
 	end
@@ -205,9 +206,9 @@ end
 	Kicks the player if the session cannot be started.
 
 	@param player Player — The player to load data for.
-	@return Types.PlayerProfile? — The loaded profile, or nil on failure.
+	@return PlayerProfile? — The loaded profile, or nil on failure.
 ]]
-function DataManager:LoadPlayerProfile(player: Player): Types.PlayerProfile?
+function DataManager:LoadPlayerProfile(player: Player): PlayerProfile?
 	local profile = PlayerStore:StartSessionAsync(tostring(player.UserId), {
 		Cancel = function()
 			return not player:IsDescendantOf(Players)
@@ -260,7 +261,7 @@ end
 	Resolves with profile or rejects with error/kick reason.
 
 	@param player Player — The player to load data for.
-	@return Promise<Types.PlayerProfile>
+	@return Promise<PlayerProfile>
 ]]
 function DataManager:LoadPlayerProfileAsync(player: Player): typeof(Promise.resolve(nil))
 	return Promise.new(function(resolve, reject)
@@ -299,7 +300,7 @@ end
 	Waits until the profile is loaded, or rejects if player leaves.
 
 	@param player Player — The player to retrieve the profile for.
-	@return Promise<Types.PlayerProfile>
+	@return Promise<PlayerProfile>
 ]]
 function DataManager:GetPlayerProfilePromise(player: Player): typeof(Promise.resolve(nil))
 	return Promise.new(function(resolve, reject)

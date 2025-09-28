@@ -8,6 +8,7 @@ local Types = require(ReplicatedStorage.Shared.Types.Services)
 local ServicesFolder = script
 
 -- Generic service type
+export type Registry = Types.Registry
 export type Service = {
     Priority: number?, -- lowest first
     Init: (self: Service, deps: any) -> (),
@@ -26,7 +27,7 @@ export type ServicesAPI = {
     DestroyAll: () -> (),
     Get: <T>(name: string) -> T,
     List: () -> {string},
-    AsTyped: () -> Types.Registry,
+    AsTyped: () -> Registry,
 }
 
 local API: ServicesAPI = {
@@ -166,8 +167,8 @@ function API.List(): {string}
     return names
 end
 
-function API.AsTyped(): Types.Registry
-    return (API._registry :: any) :: Types.Registry
+function API.AsTyped(): Registry
+    return (API._registry :: any) :: Registry
 end
 
 return API
