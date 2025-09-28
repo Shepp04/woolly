@@ -9,7 +9,6 @@ It covers setup, generating Rojo mappings, and creating new framework structures
 1. Install [Node.js](https://nodejs.org/)
 2. Clone this repo and run `npm install`
 3. Use commands with `npx woolly` (e.g. `npx woolly gen MainPlace`)
-4. (Optional) run `npm install -g .` to shorten commands by removing `npx` (e.g. `woolly serve`)
 
 ## 1. Project Setup
 
@@ -55,7 +54,20 @@ Use the Woolly CLI to quickly scaffold new files and systems.
 npx woolly create <kind> <Name> [options]
 ```
 
+#### Global Options
+* --at <dir> → override parent directory.
+* --place <Place> → create inside /place_overrides/<Place> instead of /src.
+* --system <System> → for classes/data_types, place under src/_systems/<System>/….
+
+
 #### Available Kinds
+**Place**
+```sh
+npx woolly create place SecondaryPlace
+```
+* Creates a new /place_overrides/SecondaryPlace scaffold (server/client/shared).
+* Immediately runs gen and build for that place.
+
 **Service**
 ```sh
 npx woolly create service CurrencyService
@@ -101,6 +113,43 @@ npx woolly create class PlayerData --both
     * shared -> src/shared/classes
 * Use --system <Name> to place under a system instead (e.g., src/_systems/Inventory/server/classes).
 * Requires --target shared|server or --both
+
+## 4. Place Management
+Woolly supports multiple places in one repo.
+All place configs live in /places and overrides in /place_overrides/<Place>.
+
+#### Generate Place Config
+```sh
+npx woolly gen [Place]
+```
+* Generates places/<Place>.project.json
+* Defaults to the current place (see switch).
+
+---
+
+#### Serve Place
+```sh
+npx woolly serve <Place>
+```
+* Runs rojo server places/<Place>.project.json
+* Defaults to the current place
+
+---
+
+#### Build Place
+```sh
+npx woolly create <Place>
+```
+* Builds places/<Place>.project.json into /builds/<Place>.rbxl.
+
+---
+
+#### Switch Default Place
+```sh
+npx woolly switch SecondaryPlace
+```
+* Updates .woollyrc.json so all commands (gen, serve, build, create) target that place by default.
+* Example: after switching, npx woolly gen will generate places/SecondaryPlace.project.json.
 
 ---
 

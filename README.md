@@ -49,6 +49,46 @@ npm install -g .
 
 ---
 
+## Quick Start Commands
+Here are the most useful commands to get up and running quickly:
+
+#### Build
+```sh
+npx woolly build [Place]
+```
+* Builds your project into /builds/<Place>.rbxl.
+
+#### Serve
+```sh
+npx woolly serve
+```
+* Starts rojo serve with the current place.
+* Keeps Studio synced with your local files.
+
+#### Generate Rojo Mapping
+```sh
+npx woolly gen
+```
+* Regenerates places/<Place>.project.json from your source files.
+
+#### Create New Structures
+Scaffold new modules and systems:
+```sh
+npx woolly create service CurrencyService
+npx woolly create component ItemButton
+npx woolly create system Inventory
+npx woolly create controller InventoryController --system Inventory
+npx woolly create data_type Fruits --system Inventory
+npx woolly create class ItemStand --target server
+```
+
+**Tips:**
+* Add --place <Place> to create inside a specific place (e.g. Lobby place).
+* Add --system <System> to place inside a system (e.g., _systems/Inventory/...).
+* After creating, Rojo mappings are auto-generated.
+
+---
+
 ## Documentation
 Please see /docs for documentation on the various types of file. Below is a quick summary of these types:
 
