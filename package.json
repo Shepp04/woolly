@@ -1,4 +1,8 @@
 {
+    "name": "woolly",
+    "bin": {
+        "woolly": "./tools/woolly.js"
+    },
     "scripts": {
         "setup": "node tools/bootstrap.js",
         "woolly": "node tools/woolly.js",

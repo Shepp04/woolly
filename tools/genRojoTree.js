@@ -146,13 +146,11 @@ function mergeSystemLeaf(destParent, leafAbs) {
 }
 
 function mergeDataTypes(destObj, srcDir) {
-  console.log("Merging", destObj, srcDir);
   if (!isDir(srcDir)) return 0;
   let added = 0;
 
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const full = path.join(srcDir, entry.name);
-    console.log(added, ":", full)
     if (entry.isDirectory()) {
       added += mergeDataTypes(destObj, full); // recurse
     } else if (entry.isFile() && LU(entry.name)) {
@@ -369,8 +367,11 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       mergeSystemLeaf(serverClasses,                        path.join(sRoot, "classes"));
     }
 
+    // systems/<name>/data_types
     const dtRoot = path.join(sysDir, "data_types");
-    if (isDir(dtRoot)) dtCount += mergeDataTypes(dataTypesFolder, dtRoot);
+    if (isDir(dtRoot)) {
+      dtCount += mergeDataTypes(dataTypesFolder, dtRoot);
+    }
 
     // shared parts
     const shRoot = path.join(sysDir, "shared");
@@ -380,12 +381,11 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       mergeSystemLeaf(ensureFolder(sharedRoot, "Config"), path.join(shRoot, "config"));
       mergeSystemLeaf(sharedClasses,                      path.join(shRoot, "classes"));
     }
+  }
 
-    // Attach ONLY ONCE if we added anything.
-    // This explicit child overrides any real folder with same name that $path would have mounted.
-    if (dtCount > 0) {
-      gdm.data_types = dataTypesFolder;
-    }
+  // Attach data types once after all merging is done, iff we actually have any data types
+  if (dtCount > 0) {
+    gdm.data_types = dataTypesFolder;
   }
 })();
 
