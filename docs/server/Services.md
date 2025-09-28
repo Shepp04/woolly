@@ -5,6 +5,12 @@
 
 ---
 
+## Creating a service
+To create a new service, run:
+```sh
+npx woolly create service <name> [--place <Place>]
+```
+
 ## Location
 Service modules are stored in:
 

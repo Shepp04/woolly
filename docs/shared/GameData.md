@@ -24,10 +24,12 @@ src/_game_data/source
 which contains the SSOT for all items, as well as a redactor to be run by the server Bootstrapper.
 
 ## Adding a data type
-To add a data type, create a new ModuleScript and parent it to:
+To add a data type, run:
+```sh
+npx woolly create data_type <name> [systemName]
 ```
-src/_game_data/source/data_types
-```
+This will create and open a template data type file parented to the specified system, or to src/_game_data/source/data_types by default.
+
 Please see the template at the bottom of this file.
 
 ## Getting Data

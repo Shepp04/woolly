@@ -1,11 +1,11 @@
 # Systems
 ## Introduction
-**Systems** are a way of cleanly organising a bundle of Services, Controllers, Components, Assets, and Configuration in VSCode.
-They are mapped to the appropriate locations in Studio by running:
+**Systems** are a way of cleanly organising a bundle of Services, Controllers, Components, Assets, GameData, and Configuration in VSCode.
+
+To create a new system, type:
+```sh
+npx woolly create system <name> [--place <Place>]
 ```
-node tools/genRojoTree.js
-```
-This script will update the `default.project.json` file, and so should be run everytime a new system folder is added.
 
 ## Location
 Systems are located in:
