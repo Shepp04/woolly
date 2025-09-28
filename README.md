@@ -4,15 +4,10 @@ A scalable Roblox framework that handles **data saving** and **replication**, pr
 ---
 
 ## Setup
-This framework requires Rojo - see Rojo's docs here: [rojo docs](https://rojo.space/docs)
-
-To create a new project, clone this repository and run:
-```
-npm run setup
-```
+This framework requires Node.js and Rojo - see the docs here: [Node.js](https://nodejs.org/), [rojo docs](https://rojo.space/docs)
 
 <details>
-<summary> For older versions of this framework (0.1.2 and earlier), expand this dropdown.</summary>
+<summary> For older versions of this framework (0.1.2 and earlier), follow these instructions instead.</summary>
 
 
 To setup, run:
@@ -36,6 +31,21 @@ rojo serve
 ```
 to re-sync to Studio.
 </details>
+
+To create a new project, clone this repository and run:
+```sh
+npm install
+```
+Then
+```sh
+npx woolly setup
+```
+to set up the project.
+
+To avoid typing `npx` before every command, run
+```sh
+npm install -g .
+```
 
 ---
 

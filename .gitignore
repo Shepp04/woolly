@@ -1,9 +1,28 @@
-# Project place file
-/woolly.rbxlx
+# macOS / Windows junk
+.DS_Store
+Thumbs.db
 
-# Roblox Studio lock files
-/*.rbxlx.lock
-/*.rbxl.lock
+# VSCode settings
+.vscode/
 
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Wally
 /Packages
-/build.rbxl
+
+# Builds (Rojo outputs)
+builds/
+build.rbxl
+build.rbxlx
+
+# Studio lock files
+*.rbxl.lock
+*.rbxlx.lock
+
+# Local test places
+*.rbxl
+*.rbxlx

@@ -2,76 +2,83 @@
 const fs = require("fs");
 const path = require("path");
 
-// ==== Paths ====
-const BASE = path.join(__dirname, "../src");
-const SRC_SHARED = path.join(BASE, "shared");
-const SRC_SERVER = path.join(BASE, "server");
-const SRC_CLIENT = path.join(BASE, "client");
+// ====== Args & validation ======
+const PLACE = process.argv[2];
+if (!PLACE || !/^[A-Za-z0-9_-]+$/.test(PLACE)) {
+  console.error("Usage: node tools/genRojoTree.js <PlaceName>");
+  console.error("PlaceName must be alphanumeric, dashes, or underscores.");
+  process.exit(1);
+}
 
-const SYS_ROOT  = path.join(BASE, "_systems");
-const GD_ROOT   = path.join(BASE, "_game_data");
-const MON_ROOT  = path.join(BASE, "_monetisation");
-const TYPES_ROOT= path.join(BASE, "_types");
+// ====== Paths ======
+const REPO_ROOT  = path.join(__dirname, "..");
+const SRC_BASE   = path.join(REPO_ROOT, "src");
+const OV_BASE    = path.join(REPO_ROOT, "place_overrides", PLACE);
+const OUT_DIR    = path.join(REPO_ROOT, "places");
+const OUT_PATH   = path.join(OUT_DIR, `${PLACE}.project.json`);
+const REL_BASE = path.dirname(OUT_PATH);
 
-// ==== Utils ====
+const SRC_SHARED = path.join(SRC_BASE, "shared");
+const SRC_SERVER = path.join(SRC_BASE, "server");
+const SRC_CLIENT = path.join(SRC_BASE, "client");
+const SYS_ROOT   = path.join(SRC_BASE, "_systems");
+const GD_ROOT    = path.join(SRC_BASE, "_game_data");
+const MON_ROOT   = path.join(SRC_BASE, "_monetisation");
+const TYPES_ROOT = path.join(SRC_BASE, "_types");
+
+const OV_SHARED  = path.join(OV_BASE, "shared");
+const OV_SERVER  = path.join(OV_BASE, "server");
+const OV_CLIENT  = path.join(OV_BASE, "client");
+
+// ====== Utils ======
 const toPosix = (p) => p.split(path.sep).join("/");
 const exists  = (p) => fs.existsSync(p);
 const stat    = (p) => exists(p) ? fs.statSync(p) : null;
 const isDir   = (p) => !!(stat(p) && stat(p).isDirectory());
 const isFile  = (p) => !!(stat(p) && stat(p).isFile());
-const hasInitFile = (dir) =>
-  isFile(path.join(dir, "init.luau")) || isFile(path.join(dir, "init.lua"));
+const hasInit = (dir) => isFile(path.join(dir, "init.luau")) || isFile(path.join(dir, "init.lua"));
+const relFromProject = (abs) => toPosix(path.relative(REL_BASE, abs));
 
-const LU = (name) => name.endsWith(".luau") || name.endsWith(".lua");
+const LU = (name) => /\.lua(u)?$/i.test(name);
+const isModelFile = (name) => /\.rbx(m|mx)$/i.test(name);
 const stripExt = (n) => n.replace(/\.(luau|lua|rbxm|rbxmx)$/i, "");
-const toPascal = (s) => {
-  // Keep all-caps words as-is (UX, UI, ID)
-  if (/^[A-Z0-9_]+$/.test(s)) return s;
-  return s
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map(w => w[0].toUpperCase() + w.slice(1))
-    .join("");
-};
+const toPascal = (s) => /^[A-Z0-9_]+$/.test(s)
+  ? s
+  : s.split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase()+w.slice(1)).join("");
 
-const isModelFile = (name) => name.endsWith(".rbxm") || name.endsWith(".rbxmx");
-
-function getNode(parent, key) {
-  if (!parent[key]) parent[key] = { $className: "Folder" };
-  return parent[key];
-}
-
-// Ensure & get folder node
 function ensureFolder(parent, key) {
   if (!parent[key]) parent[key] = { $className: "Folder" };
   return parent[key];
 }
 
-// Add file node; className optional (Script / LocalScript)
 function addFile(parent, nodeName, absPath, className /* optional */) {
-  const rel = toPosix(path.relative(process.cwd(), absPath));
-  if (className) {
-    parent[nodeName] = { $className: className, $path: rel };
-  } else {
-    parent[nodeName] = { $path: rel }; // ModuleScript inferred for .lua/.luau; models mapped as Models
-  }
+  const rel = relFromProject(absPath);
+  parent[nodeName] = className ? { $className: className, $path: rel } : { $path: rel };
 }
 
-// Add a folder-backed ModuleScript node (directory must contain init.luau or init.lua)
+function setFileNode(parent, nodeName, absPath, className /* optional */) {
+  const rel = relFromProject(absPath);
+  parent[nodeName] = className ? { $className: className, $path: rel } : { $path: rel };
+}
+
 function addFolderModule(parent, nodeName, absDir) {
-  const hasInit = isFile(path.join(absDir, "init.luau")) || isFile(path.join(absDir, "init.lua"));
-  if (!hasInit) return; // must contain init
-
-  const relDir = toPosix(path.relative(process.cwd(), absDir));
-  parent[nodeName] = { $path: relDir }; // Rojo infers ModuleScript; allows children
+  if (!isDir(absDir) || !hasInit(absDir)) return;
+  const relDir = relFromProject(absDir);
+  parent[nodeName] = { $path: relDir }; // folder-backed ModuleScript
 }
 
-// Copy all .lua/.luau (recursively) from `srcDir` into `destParent` (creating PascalCase folders)
+// If directory is folder-backed, mount as ModuleScript; else as Folder with mirrored children
+function mountSection(parent, nodeName, absDir) {
+  if (!isDir(absDir)) return;
+  if (hasInit(absDir)) addFolderModule(parent, nodeName, absDir);
+  else mirrorFolderAsModules(ensureFolder(parent, nodeName), absDir);
+}
+
 function mirrorFolderAsModules(destParent, srcDir) {
   if (!isDir(srcDir)) return;
 
-  // If this directory itself is a folder-backed module, mount it and stop
-  if (hasInitFile(srcDir)) {
+  // Mount the directory itself if it's folder-backed
+  if (hasInit(srcDir)) {
     const nodeName = toPascal(path.basename(srcDir));
     addFolderModule(destParent, nodeName, srcDir);
     return;
@@ -80,79 +87,36 @@ function mirrorFolderAsModules(destParent, srcDir) {
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const full = path.join(srcDir, entry.name);
     if (entry.isDirectory()) {
-      if (hasInitFile(full)) {
-        // Child folder is a folder-backed module
-        const nodeName = toPascal(entry.name);
-        addFolderModule(destParent, nodeName, full);
-      } else {
-        // Plain folder: recurse and mirror plain ModuleScripts inside
-        const node = ensureFolder(destParent, toPascal(entry.name));
-        mirrorFolderAsModules(node, full);
-      }
+      if (hasInit(full)) addFolderModule(destParent, toPascal(entry.name), full);
+      else mirrorFolderAsModules(ensureFolder(destParent, toPascal(entry.name)), full);
     } else if (entry.isFile() && LU(entry.name)) {
       addFile(destParent, stripExt(entry.name), full);
     }
   }
 }
 
-// Copy .lua/.luau recursively into a destination folder node,
-// IGNORING folder-backed init.* (i.e., never promoting folders to ModuleScript).
-function mirrorFolderAsPlainModules(destParent, srcDir) {
-  if (!isDir(srcDir)) return;
-
-  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
-    const full = path.join(srcDir, entry.name);
-    if (entry.isDirectory()) {
-      const node = ensureFolder(destParent, toPascal(entry.name));
-      mirrorFolderAsPlainModules(node, full);
-    } else if (entry.isFile() && LU(entry.name)) {
-      addFile(destParent, stripExt(entry.name), full);
-    }
-  }
-}
-
-// Mount a “section” that may be folder-backed or a plain folder
-function mountSection(parent, nodeName, absDir) {
-  if (!isDir(absDir)) return; // nothing to mount
-  if (hasInitFile(absDir)) {
-    // Folder-backed ModuleScript
-    addFolderModule(parent, nodeName, absDir);
-  } else {
-    // Plain folder; mirror child modules into it
-    const node = ensureFolder(parent, nodeName);
-    mirrorFolderAsModules(node, absDir);
-  }
-}
-
-// NEW: Copy all .rbxm/.rbxmx (recursively) from `srcDir` into `destParent`
 function mirrorAssets(destParent, srcDir) {
   if (!isDir(srcDir)) return;
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const full = path.join(srcDir, entry.name);
     if (entry.isDirectory()) {
-      const node = ensureFolder(destParent, toPascal(entry.name));
-      mirrorAssets(node, full);
+      mirrorAssets(ensureFolder(destParent, toPascal(entry.name)), full);
     } else if (entry.isFile() && isModelFile(entry.name)) {
       const nodeName = stripExt(entry.name);
-      if (destParent[nodeName]) {
-        throw new Error(`[gen] Asset name collision: ${nodeName} already exists in destination`);
-      }
+      if (destParent[nodeName]) throw new Error(`[gen] Asset name collision: ${nodeName}`);
       addFile(destParent, nodeName, full);
     }
   }
 }
 
-// Merge a system leaf folder (controllers/components/utils/services/packages/config) into a dest folderish node
-// Flat merge by names; errors on collisions.
+// Merge system leaf (controllers/components/utils/services/packages/classes/config) into destination
 function mergeSystemLeaf(destParent, leafAbs) {
   if (!isDir(leafAbs)) return;
 
-  // If this directory itself is a folder-backed module, mount it and stop
-  if (hasInitFile(leafAbs)) {
+  // If the directory itself is folder-backed, mount/replace whole node
+  if (hasInit(leafAbs)) {
     const nodeName = toPascal(path.basename(leafAbs));
-    if (destParent[nodeName]) {
-      throw new Error(`[gen] Name collision while merging systems: ${nodeName} already exists in destination`);
-    }
+    // overlay wins: replace whatever is there
     addFolderModule(destParent, nodeName, leafAbs);
     return;
   }
@@ -160,146 +124,234 @@ function mergeSystemLeaf(destParent, leafAbs) {
   for (const entry of fs.readdirSync(leafAbs, { withFileTypes: true })) {
     const full = path.join(leafAbs, entry.name);
     if (entry.isDirectory()) {
-      if (hasInitFile(full)) {
+      if (hasInit(full)) {
         const nodeName = toPascal(entry.name);
-        if (destParent[nodeName]) {
-          throw new Error(`[gen] Name collision while merging systems: ${nodeName} already exists in destination`);
-        }
+        // overlay wins: replace whatever is there
         addFolderModule(destParent, nodeName, full);
       } else {
+        // plain folder -> recurse, creating the folder if needed
         const node = ensureFolder(destParent, toPascal(entry.name));
         mergeSystemLeaf(node, full);
       }
     } else if (entry.isFile() && LU(entry.name)) {
       const nodeName = stripExt(entry.name);
-      if (destParent[nodeName]) {
-        throw new Error(`[gen] Name collision while merging systems: ${nodeName} already exists in destination`);
-      }
-      addFile(destParent, nodeName, full);
+      // overlay wins: replace file node
+      setFileNode(destParent, nodeName, full);
+    } else if (entry.isFile() && isModelFile(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      // overlay wins: replace asset node
+      setFileNode(destParent, nodeName, full);
     }
   }
 }
 
-// ==== Base skeleton ====
-const tree = {
-  name: "woolly",
+function mergeDataTypes(destObj, srcDir) {
+  if (!isDir(srcDir)) return 0;
+  let added = 0;
+
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const full = path.join(srcDir, entry.name);
+    if (entry.isDirectory()) {
+      added += mergeDataTypes(destObj, full); // recurse
+    } else if (entry.isFile() && LU(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      setFileNode(destObj, nodeName, full); // overlay wins
+      added++;
+    }
+  }
+  return added;
+}
+
+// Helper: mount base, then overlay (overlay wins by name)
+function overlaySection(parent, nodeName, baseAbs, overAbs) {
+  const overlayIsFB = isDir(overAbs) && hasInit(overAbs);
+  const baseIsFB    = isDir(baseAbs) && hasInit(baseAbs);
+
+  if (overlayIsFB) {
+    // Overlay provides a folder-backed module: replace entirely
+    addFolderModule(parent, nodeName, overAbs);
+    return;
+  }
+
+  // Otherwise, mount base (folder-backed or mirrored folder)
+  if (baseIsFB) {
+    addFolderModule(parent, nodeName, baseAbs);
+  } else if (isDir(baseAbs)) {
+    mirrorFolderAsModules(ensureFolder(parent, nodeName), baseAbs);
+  }
+
+  // Now merge overlay *files/folders* in, letting overlay replace conflicts
+  if (isDir(overAbs)) {
+    const target = ensureFolder(parent, nodeName);
+    mergeSystemLeaf(target, overAbs);
+  }
+}
+
+// Mount ExternalPackages by enumerating Packages/* and skipping _*
+function mountExternalPackages(node /* ReplicatedStorage root */) {
+  const ext = ensureFolder(node, "ExternalPackages");
+  const PKG_DIR = path.join(REPO_ROOT, "Packages");
+  if (!isDir(PKG_DIR)) return;
+
+  for (const entry of fs.readdirSync(PKG_DIR, { withFileTypes: true })) {
+    const name = entry.name;
+
+    // Skip Wally's internals and any other private/hidden entries
+    if (name.startsWith("_")) continue;
+
+    const abs = path.join(PKG_DIR, name);
+
+    // If it's a folder-backed module (contains init.lua/luau), mount as such
+    if (entry.isDirectory() && hasInit(abs)) {
+      addFolderModule(ext, name, abs); // keep package name as-is
+      continue;
+    }
+
+    // If it's a directory without init, or a loose file module, just map the path
+    if (entry.isDirectory() || LU(name)) {
+      // Use raw name; don't PascalCase package names
+      addFile(ext, entry.isDirectory() ? name : stripExt(name), abs);
+    }
+  }
+}
+
+// ====== Project skeleton ======
+const project = {
+  name: `woolly-${PLACE}`,
   tree: {
     $className: "DataModel",
 
     ReplicatedStorage: {
-      Shared: {
-        $className: "Folder",
-      },
-    //  ExternalPackages/Wally: map if you need it here instead
-      ExternalPackages: { $path: "Packages" }
+      Shared: { $className: "Folder" },
+      ExternalPackages: { $className: "Folder" }
     },
 
     ServerScriptService: {
-      Server: {
-        $className: "Folder",
-      }
+      Server: { $className: "Folder" }
     },
 
     StarterPlayer: {
       StarterPlayerScripts: {
-        Client: {
-          $className: "Folder",
-        }
+        Client: { $className: "Folder" }
       }
     }
   }
 };
 
-const sharedRoot = tree.tree.ReplicatedStorage.Shared;
-const serverRoot = tree.tree.ServerScriptService.Server;
-const clientRoot = tree.tree.StarterPlayer.StarterPlayerScripts.Client;
-const clientComponents  = clientRoot.Components;
-const clientUtils       = clientRoot.Utils;
+const sharedRoot = project.tree.ReplicatedStorage.Shared;
+const serverRoot = project.tree.ServerScriptService.Server;
+const clientRoot = project.tree.StarterPlayer.StarterPlayerScripts.Client;
 
-// ==== 1) Core shared ====
+// Mount External Packages, ignoring _Index and _Index 2 dirs
+mountExternalPackages(project.tree.ReplicatedStorage);
+
+// ====== Build: Shared (base + overlay) ======
 (function buildShared() {
-  // Shared/Packages (folder-backed ModuleScript) ← src/shared/packages/
-  addFolderModule(sharedRoot, "Packages", path.join(SRC_SHARED, "packages"));
+  overlaySection(sharedRoot, "Packages",     path.join(SRC_SHARED, "packages"),     path.join(OV_SHARED, "packages"));
+  overlaySection(sharedRoot, "GameData",     path.join(GD_ROOT, "resolver"),        path.join(OV_SHARED, "game_data_resolver"));
+  overlaySection(sharedRoot, "Types",        TYPES_ROOT,                             path.join(OV_SHARED, "types"));
+  overlaySection(sharedRoot, "Config",       path.join(SRC_SHARED, "config"),        path.join(OV_SHARED, "config"));
+  overlaySection(sharedRoot, "Monetisation", path.join(MON_ROOT, "resolver"),        path.join(OV_SHARED, "monetisation_resolver"));
 
-  // Shared/GameData (folder-backed) ← src/_game_data/resolver/
-  addFolderModule(sharedRoot, "GameData", path.join(GD_ROOT, "resolver"));
+  // Classes (shared)
+  overlaySection(sharedRoot, "Classes",      path.join(SRC_SHARED, "classes"),       path.join(OV_SHARED, "classes"));
 
-  // Shared/Types (folder-backed) ← src/_types/
-  addFolderModule(sharedRoot, "Types", TYPES_ROOT);
+  // Assets/UI & Assets/Models
+  const assets = ensureFolder(sharedRoot, "Assets");
+  const ui = ensureFolder(assets, "UI");
+  const models = ensureFolder(assets, "Models");
 
-  // Shared/Config (folder-backed) ← src/shared/config/
-  addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
-
-  // Shared/Monetisation (folder-backed) ← src/_monetisation/resolver/
-  addFolderModule(sharedRoot, "Monetisation", path.join(MON_ROOT, "resolver"));
-
-  // Shared/Classes (always a folder)
-  const sharedClasses = ensureFolder(sharedRoot, "Classes");
-  mirrorFolderAsPlainModules(sharedClasses, path.join(SRC_SHARED, "classes"));
-
-  // Shared/Assets/UI + Models
-  const assetsFolder = ensureFolder(sharedRoot, "Assets");
-  const assetsUI = ensureFolder(assetsFolder, "UI");
-  const assetsModels = ensureFolder(assetsFolder, "Models");
-
-  mirrorAssets(assetsUI,     path.join(SRC_SHARED, "assets", "ui"));
-  mirrorAssets(assetsModels, path.join(SRC_SHARED, "assets", "models"));
+  mirrorAssets(ui,     path.join(SRC_SHARED, "assets", "ui"));
+  mirrorAssets(models, path.join(SRC_SHARED, "assets", "models"));
+  mirrorAssets(ui,     path.join(OV_SHARED,  "assets", "ui"));
+  mirrorAssets(models, path.join(OV_SHARED,  "assets", "models"));
 })();
 
-// ==== 2) Core server ====
+// ====== Build: Server (base + overlay) ======
 (function buildServer() {
-  const bootSrv = path.join(SRC_SERVER, "Bootstrap.server.luau");
-  if (isFile(bootSrv)) addFile(serverRoot, "Bootstrap", bootSrv);
+  // Bootstrap (file can be overridden)
+  const bsBase = path.join(SRC_SERVER, "Bootstrap.server.luau");
+  const bsOv   = path.join(OV_SERVER,  "Bootstrap.server.luau");
+  if (isFile(bsOv)) addFile(serverRoot, "Bootstrap", bsOv);
+  else if (isFile(bsBase)) addFile(serverRoot, "Bootstrap", bsBase);
 
-  addFolderModule(serverRoot, "Services", path.join(SRC_SERVER, "services"));
-  addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
-  addFolderModule(serverRoot, "GameDataMaster", path.join(GD_ROOT, "source"));
-  addFolderModule(serverRoot, "Monetisation", path.join(MON_ROOT, "source"));
+  // Folder-backed registries
+  overlaySection(serverRoot, "Services",       path.join(SRC_SERVER, "services"),     path.join(OV_SERVER, "services"));
+  overlaySection(serverRoot, "Packages",       path.join(SRC_SERVER, "packages"),     path.join(OV_SERVER, "packages"));
+  overlaySection(serverRoot, "Monetisation",   path.join(MON_ROOT, "source"),         path.join(OV_SERVER, "monetisation"));
 
-  // Server/Classes (always a Folder)
-  const serverClasses = ensureFolder(serverRoot, "Classes");
-  mirrorFolderAsPlainModules(serverClasses, path.join(SRC_SERVER, "classes"));
+  // Classes (server)
+  overlaySection(serverRoot, "Classes",        path.join(SRC_SERVER, "classes"),      path.join(OV_SERVER, "classes"));
+
+  // --- New: map GameDataMaster as a single ModuleScript if present
+  const gdmFileBase = path.join(GD_ROOT, "source", "GameDataMaster.luau");
+  const gdmFileOv   = path.join(OV_SERVER, "game_data_master", "GameDataMaster.luau");
+
+  if (isFile(gdmFileOv)) {
+    addFile(serverRoot, "GameDataMaster", gdmFileOv);
+  } else if (isFile(gdmFileBase)) {
+    addFile(serverRoot, "GameDataMaster", gdmFileBase);
+  } else {
+    // fallback to old behavior if someone hasn't renamed the file yet
+    overlaySection(serverRoot, "GameDataMaster",
+      path.join(GD_ROOT, "source"),
+      path.join(OV_SERVER, "game_data_master")
+    );
+  }
 })();
 
-// ==== 3) Core client ====
+// ====== Build: Client (base + overlay) ======
 (function buildClient() {
-  const bootCli = path.join(SRC_CLIENT, "Bootstrap.client.luau");
-  if (isFile(bootCli)) addFile(clientRoot, "Bootstrap", bootCli);
+  // Bootstrap (file can be overridden)
+  const bcBase = path.join(SRC_CLIENT, "Bootstrap.client.luau");
+  const bcOv   = path.join(OV_CLIENT,  "Bootstrap.client.luau");
+  if (isFile(bcOv)) addFile(clientRoot, "Bootstrap", bcOv);
+  else if (isFile(bcBase)) addFile(clientRoot, "Bootstrap", bcBase);
 
-  // Mount sections — auto folder-backed if init.* exists, else as Folder
-  mountSection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"));
-  mountSection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"));
-  mountSection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"));
+  // Sections: Controllers / Components / Utils (folder-backed or plain)
+  overlaySection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"), path.join(OV_CLIENT, "controllers"));
+  overlaySection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"),  path.join(OV_CLIENT, "components"));
+  overlaySection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"),       path.join(OV_CLIENT, "utils"));
 })();
 
-// ==== 4) Systems merge ====
+// ====== Systems merge (applies to all places) ======
 (function mergeSystems() {
   if (!isDir(SYS_ROOT)) return;
 
-  // Shared assets nodes (unchanged)
-  const assetsFolder = ensureFolder(sharedRoot, "Assets");
-  const assetsUI = ensureFolder(assetsFolder, "UI");
-  const assetsModels = ensureFolder(assetsFolder, "Models");
+  // Ensure these nodes exist (respecting folder-back if base was mounted)
+  overlaySection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"), path.join(OV_CLIENT, "controllers"));
+  overlaySection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"),  path.join(OV_CLIENT, "components"));
+  overlaySection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"),       path.join(OV_CLIENT, "utils"));
+  overlaySection(serverRoot, "Services",    path.join(SRC_SERVER, "services"),    path.join(OV_SERVER, "services"));
+  overlaySection(serverRoot, "Packages",    path.join(SRC_SERVER, "packages"),    path.join(OV_SERVER, "packages"));
+  overlaySection(serverRoot, "Classes",     path.join(SRC_SERVER, "classes"),     path.join(OV_SERVER, "classes"));
+  overlaySection(sharedRoot, "Classes",     path.join(SRC_SHARED, "classes"),     path.join(OV_SHARED, "classes"));
 
-  // Ensure client sections exist the same way as core
-  // (If the repo has init.* in src/client/controllers, they'll be ModuleScripts; otherwise Folders.)
-  mountSection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"));
-  mountSection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"));
-  mountSection(clientRoot, "Utils",       path.join(SRC_CLIENT, "utils"));
+  const clientControllers = ensureFolder(clientRoot, "Controllers");
+  const clientComponents  = ensureFolder(clientRoot, "Components");
+  const clientUtils       = ensureFolder(clientRoot, "Utils");
+  const sharedClasses     = ensureFolder(sharedRoot, "Classes");
+  const serverClasses     = ensureFolder(serverRoot, "Classes");
 
-  const clientControllers = clientRoot.Controllers;
-  const clientComponents  = clientRoot.Components;
-  const clientUtils       = clientRoot.Utils;
+  const assets = ensureFolder(sharedRoot, "Assets");
+  const ui = ensureFolder(assets, "UI");
+  const models = ensureFolder(assets, "Models");
+  
+  const gdm = serverRoot.GameDataMaster || ensureFolder(serverRoot, "GameDataMaster");
+  
+  // Build ONE synthetic data_types folder
+  const dataTypesFolder = { $className: "Folder" };
+  let dtCount = 0;
 
-  // Prepare shared/server Classes folders once
-  const sharedClasses = ensureFolder(sharedRoot, "Classes");
-  const serverClasses = ensureFolder(serverRoot, "Classes");
+  // Merge base repo data types (on disk: src/_game_data/source/data_types)
+  const BASE_DT_DIR = path.join(GD_ROOT, "source", "data_types");
+  dtCount += mergeDataTypes(dataTypesFolder, BASE_DT_DIR);
 
   for (const sysName of fs.readdirSync(SYS_ROOT)) {
     const sysDir = path.join(SYS_ROOT, sysName);
     if (!isDir(sysDir)) continue;
 
-    // client
+    // client parts
     const cRoot = path.join(sysDir, "client");
     if (isDir(cRoot)) {
       mergeSystemLeaf(clientControllers, path.join(cRoot, "controllers"));
@@ -307,34 +359,38 @@ const clientUtils       = clientRoot.Utils;
       mergeSystemLeaf(clientUtils,       path.join(cRoot, "utils"));
     }
 
-    // server (unchanged)
+    // server parts
     const sRoot = path.join(sysDir, "server");
     if (isDir(sRoot)) {
-      if (!serverRoot.Services) addFolderModule(serverRoot, "Services", path.join(SRC_SERVER, "services"));
-      if (serverRoot.Services)  mergeSystemLeaf(serverRoot.Services, path.join(sRoot, "services"));
-
-      if (!serverRoot.Packages) addFolderModule(serverRoot, "Packages", path.join(SRC_SERVER, "packages"));
-      if (serverRoot.Packages)  mergeSystemLeaf(serverRoot.Packages, path.join(sRoot, "packages"));
-    
-      const sysServerClasses = path.join(sRoot, "classes");
-      mirrorFolderAsPlainModules(serverClasses, sysServerClasses);
+      mergeSystemLeaf(ensureFolder(serverRoot, "Services"), path.join(sRoot, "services"));
+      mergeSystemLeaf(ensureFolder(serverRoot, "Packages"), path.join(sRoot, "packages"));
+      mergeSystemLeaf(serverClasses,                        path.join(sRoot, "classes"));
     }
 
-    // shared assets/config (unchanged)
+    // systems/<name>/data_types
+    const dtRoot = path.join(sysDir, "data_types");
+    if (isDir(dtRoot)) {
+      dtCount += mergeDataTypes(dataTypesFolder, dtRoot);
+    }
+
+    // shared parts
     const shRoot = path.join(sysDir, "shared");
     if (isDir(shRoot)) {
-      mirrorAssets(assetsUI,     path.join(shRoot, "assets", "ui"));
-      mirrorAssets(assetsModels, path.join(shRoot, "assets", "models"));
-
-      if (!sharedRoot.Config) addFolderModule(sharedRoot, "Config", path.join(SRC_SHARED, "config"));
-      if (sharedRoot.Config)  mergeSystemLeaf(sharedRoot.Config, path.join(shRoot, "config"));
-    
-      const sysSharedClasses = path.join(shRoot, "classes");
-      mirrorFolderAsPlainModules(sharedClasses, sysSharedClasses);
+      mirrorAssets(ui,     path.join(shRoot, "assets", "ui"));
+      mirrorAssets(models, path.join(shRoot, "assets", "models"));
+      mergeSystemLeaf(ensureFolder(sharedRoot, "Config"), path.join(shRoot, "config"));
+      mergeSystemLeaf(sharedClasses,                      path.join(shRoot, "classes"));
     }
+  }
+
+  // Attach data types once after all merging is done, iff we actually have any data types
+  if (dtCount > 0) {
+    gdm.data_types = dataTypesFolder;
   }
 })();
 
-// ==== Write project ====
-fs.writeFileSync("default.project.json", JSON.stringify(tree, null, 2));
-console.log("✅ default.project.json generated.");
+// ====== Write project ======
+if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.writeFileSync(OUT_PATH, JSON.stringify(project, null, 2));
+console.log(`✅ Wrote ${toPosix(path.relative(process.cwd(), OUT_PATH))}`);
+console.log(`   Base: src/*  Overlay: ${exists(OV_BASE) ? toPosix(path.relative(process.cwd(), OV_BASE)) : "(none)"}`);

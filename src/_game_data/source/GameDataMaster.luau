@@ -82,6 +82,10 @@ end
 	@param container Instance  (folder containing DataType modules)
 ]]
 function GameDataMaster:_ingest(container: Instance)
+	if not container then
+		warn(`[GameDataMaster] No container or data types provided!`)
+		return
+	end
 	for _, child in container:GetChildren() do
 		if child:IsA("ModuleScript") and child.Name ~= "init" then
 			local ok, dictOrErr = pcall(require, child)
@@ -195,7 +199,7 @@ function GameDataMaster:Init(opts: { container: Instance?, autoPublish: boolean?
 	end
 	self._inited = true
 
-	local container = (opts and opts.container) or script:WaitForChild("data_types")
+	local container = (opts and opts.container) or script:FindFirstChild("data_types")
 	self._privateByType = {}
 	self._publicByType  = {}
 	self._version = tostring(os.time()) -- swap to a content hash later if desired

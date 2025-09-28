@@ -3,6 +3,12 @@
 ## Introduction
 **Components** are client class modules that handle UI elements and self-contained client systems.
 
+## Creating a component
+To create a new component, run:
+```sh
+npx woolly create component <name> [--place <Place>]
+```
+
 ---
 
 ## Location

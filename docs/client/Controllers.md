@@ -3,6 +3,12 @@
 ## Introduction
 **Controllers** are client-only *singleton* modules that manage the client logic for a specific system in your game. They manage state, UX, and UI through client `Components`.
 
+## Creating a controller
+To create a new controller, run:
+```sh
+npx woolly create controller <name> [--place <Place>]
+```
+
 ---
 
 ## Location
