@@ -548,11 +548,11 @@ Woolly CLI
   switch <Place>          Make <Place> the default place in .woollyrc.json
 
   create place       <Name>
-  create service     <Name> [--at <dir>] [--place <Place>]
-  create controller  <Name> [--at <dir>] [--place <Place>]
-  create component   <Name> [--at <dir>] [--place <Place>]
-  create system      <Name> [--at <dir>] [--place <Place>]
-  create data_type   <Name> [--at <dir>] [--place <Place>]
+  create service     <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
+  create controller  <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
+  create component   <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
+  create system      <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
+  create data_type   <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
   create class       <Name> (--target shared|server | --both) [--system <Sys>] [--place <Place>]
 
 Notes:
@@ -691,17 +691,48 @@ if (cmd === "create") {
       break;
     }
     case "service": {
-      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("service", place, null);
+      if (atDirOpt) {
+        // --at always wins
+        baseAbs = path.resolve(REPO, atDirOpt);
+      } else if (systemName) {
+        // If a system is specified, target its data_types folder
+        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "server", "services");
+      } else {
+        // Fall back to global game data folder
+        baseAbs = baseDirFor("service", place, null);
+      }
+      
       created = createService(name, baseAbs);
       break;
     }
     case "controller": {
-      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("controller", place, null);
+      if (atDirOpt) {
+        // --at always wins
+        baseAbs = path.resolve(REPO, atDirOpt);
+      } else if (systemName) {
+        // If a system is specified, target its data_types folder
+        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "client", "controllers");
+      } else {
+        // Fall back to global game data folder
+        baseAbs = baseDirFor("controller", place, null);
+      }
+
       created = createController(name, baseAbs);
       break;
     }
     case "component": {
-      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("component", place, null);
+      if (atDirOpt) {
+        // --at always wins
+        baseAbs = path.resolve(REPO, atDirOpt);
+      } else if (systemName) {
+        // If a system is specified, target its client/components folder
+        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "client", "components");
+      } else {
+        // Fall back to global game data folder
+        baseAbs = baseDirFor("component", place, null);
+      }
+
+      // baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("component", place, null);
       created = createComponent(name, baseAbs);
       break;
     }
@@ -711,7 +742,17 @@ if (cmd === "create") {
       break;
     }
     case "data_type": {
-      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("data_type", place, null);
+      if (atDirOpt) {
+        // --at always wins
+        baseAbs = path.resolve(REPO, atDirOpt);
+      } else if (systemName) {
+        // If a system is specified, target its data_types folder
+        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "data_types");
+      } else {
+        // Fall back to global game data folder
+        baseAbs = baseDirFor("data_type", place, null);
+      }
+      
       created = createDataType(name, baseAbs);
       break;
     }
