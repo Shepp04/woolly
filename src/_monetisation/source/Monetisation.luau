@@ -17,7 +17,7 @@ else
 end
 
 -- // Data (server-only SSOT)
-local ProductDefs = require(script.ProductDefs)
+local ProductDefs = require(script.Aggregator)
 
 -- // Packages (shared replication)
 local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
