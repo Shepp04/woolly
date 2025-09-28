@@ -471,7 +471,65 @@ function createSystem(name, parentAbsOrNull) {
 
   // data types
   ensureDir(path.join(base, "data_types"));
-  
+
+  // monetisation
+  const monetisationDir = path.join(base, "monetisation");
+  ensureDir(monetisationDir);
+
+  const devProductsPath = path.join(monetisationDir, "DevProducts.luau");
+  const gamepassesPath = path.join(monetisationDir, "Gamepasses.luau");
+
+  const tmplDevProducts = `--!strict
+-- // Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- // Types
+local Types = require(ReplicatedStorage.Shared.Types.Monetisation)
+type DevProductPrivate = Types.DevProductPrivate
+type Handler = Types.Handler
+
+-- ========== Handlers ========== --
+local Handlers: { [string]: Handler } = {
+
+}
+
+-- ========== Definitions ========== --
+local defs: { devProducts: { DevProductPrivate } } = {
+    devProducts = {
+
+\t},
+}
+
+return defs
+`;
+
+  const tmplGamepasses = `--!strict
+-- // Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- // Types
+local Types = require(ReplicatedStorage.Shared.Types.Monetisation)
+type Handler = Types.Handler
+type GamepassPrivate = Types.GamepassPrivate
+
+-- ========== Handlers ========== --
+local Handlers: { [string]: Handler } = {
+
+}
+
+-- ========== Definitions ========== --
+local defs: { gamepasses: { GamepassPrivate } } = {
+    gamepasses = {
+
+    }
+}
+
+return defs
+`;
+
+  writeIfMissing(devProductsPath, tmplDevProducts);
+  writeIfMissing(gamepassesPath, tmplGamepasses);
+
   console.log("✓ created system scaffold at", path.relative(process.cwd(), base));
   return [];
 }
