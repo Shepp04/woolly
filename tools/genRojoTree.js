@@ -162,6 +162,23 @@ function mergeDataTypes(destObj, srcDir) {
   return added;
 }
 
+function mergeFlatModules(destObj, srcDir) {
+  if (!isDir(srcDir)) return 0;
+  let added = 0;
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const full = path.join(srcDir, entry.name);
+    if (entry.isDirectory()) {
+      // allow nesting, but still flatten files into the same dest
+      added += mergeFlatModules(destObj, full);
+    } else if (entry.isFile() && LU(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      setFileNode(destObj, nodeName, full); // overlay wins
+      added++;
+    }
+  }
+  return added;
+}
+
 // Helper: mount base, then overlay (overlay wins by name)
 function overlaySection(parent, nodeName, baseAbs, overAbs) {
   const overlayIsFB = isDir(overAbs) && hasInit(overAbs);
@@ -187,32 +204,14 @@ function overlaySection(parent, nodeName, baseAbs, overAbs) {
   }
 }
 
-// Mount ExternalPackages by enumerating Packages/* and skipping _*
 function mountExternalPackages(node /* ReplicatedStorage root */) {
-  const ext = ensureFolder(node, "ExternalPackages");
   const PKG_DIR = path.join(REPO_ROOT, "Packages");
   if (!isDir(PKG_DIR)) return;
 
-  for (const entry of fs.readdirSync(PKG_DIR, { withFileTypes: true })) {
-    const name = entry.name;
-
-    // Skip Wally's internals and any other private/hidden entries
-    if (name.startsWith("_")) continue;
-
-    const abs = path.join(PKG_DIR, name);
-
-    // If it's a folder-backed module (contains init.lua/luau), mount as such
-    if (entry.isDirectory() && hasInit(abs)) {
-      addFolderModule(ext, name, abs); // keep package name as-is
-      continue;
-    }
-
-    // If it's a directory without init, or a loose file module, just map the path
-    if (entry.isDirectory() || LU(name)) {
-      // Use raw name; don't PascalCase package names
-      addFile(ext, entry.isDirectory() ? name : stripExt(name), abs);
-    }
-  }
+  node.ExternalPackages = {
+    $className: "Folder",
+    $path: relFromProject(PKG_DIR),
+  };
 }
 
 // ====== Project skeleton ======
@@ -278,7 +277,45 @@ mountExternalPackages(project.tree.ReplicatedStorage);
   // Folder-backed registries
   overlaySection(serverRoot, "Services",       path.join(SRC_SERVER, "services"),     path.join(OV_SERVER, "services"));
   overlaySection(serverRoot, "Packages",       path.join(SRC_SERVER, "packages"),     path.join(OV_SERVER, "packages"));
-  overlaySection(serverRoot, "Monetisation",   path.join(MON_ROOT, "source"),         path.join(OV_SERVER, "monetisation"));
+  
+  // --- Monetisation as a single ModuleScript + synthetic product_defs
+  const monFileBase = path.join(MON_ROOT, "source", "Monetisation.luau");   // renamed from init.luau
+  const monFileOv   = path.join(OV_SERVER, "monetisation", "Monetisation.luau");
+
+  // Map the ModuleScript
+  if (isFile(monFileOv)) {
+    addFile(serverRoot, "Monetisation", monFileOv);
+  } else if (isFile(monFileBase)) {
+    addFile(serverRoot, "Monetisation", monFileBase);
+  } else {
+    // Back-compat fallback if someone still has folder-backed source
+    overlaySection(
+      serverRoot,
+      "Monetisation",
+      path.join(MON_ROOT, "source"),
+      path.join(OV_SERVER, "monetisation")
+    );
+  }
+
+  // Build ONE synthetic product_defs folder under Monetisation
+  const monNode = serverRoot.Monetisation || ensureFolder(serverRoot, "Monetisation");
+  const productDefsFolder = monNode.product_defs || (monNode.product_defs = { $className: "Folder" });
+
+  // Base bucket for core product defs
+  const baseBucket = ensureFolder(productDefsFolder, "Base");
+  const BASE_PD_DIR = path.join(MON_ROOT, "source", "product_defs");
+  const OV_BASE_PD_DIR = path.join(OV_SERVER, "monetisation", "product_defs");
+  mergeFlatModules(baseBucket, BASE_PD_DIR);
+  mergeFlatModules(baseBucket, OV_BASE_PD_DIR);
+
+  // Keep Aggregator.luau mapped next to product_defs
+  const pdFileBase = path.join(MON_ROOT, "source", "Aggregator.luau");
+  const pdFileOv   = path.join(OV_SERVER, "monetisation", "Aggregator.luau");
+  if (isFile(pdFileOv)) {
+    addFile(monNode, "Aggregator", pdFileOv);
+  } else if (isFile(pdFileBase)) {
+    addFile(monNode, "Aggregator", pdFileBase);
+  }
 
   // Classes (server)
   overlaySection(serverRoot, "Classes",        path.join(SRC_SERVER, "classes"),      path.join(OV_SERVER, "classes"));
@@ -298,6 +335,10 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       path.join(OV_SERVER, "game_data_master")
     );
   }
+
+  // Always ensure an empty data_types folder exists under GameDataMaster
+  const gdmNode = serverRoot.GameDataMaster || ensureFolder(serverRoot, "GameDataMaster");
+  gdmNode.data_types = gdmNode.data_types || { $className: "Folder" };
 })();
 
 // ====== Build: Client (base + overlay) ======
@@ -338,14 +379,14 @@ mountExternalPackages(project.tree.ReplicatedStorage);
   const models = ensureFolder(assets, "Models");
   
   const gdm = serverRoot.GameDataMaster || ensureFolder(serverRoot, "GameDataMaster");
-  
-  // Build ONE synthetic data_types folder
-  const dataTypesFolder = { $className: "Folder" };
-  let dtCount = 0;
+  const dtFolder = gdm.data_types || (gdm.data_types = { $className: "Folder" });
+
+  const monNode = serverRoot.Monetisation || ensureFolder(serverRoot, "Monetisation");
+  const productDefsFolder = monNode.product_defs || (monNode.product_defs = { $className: "Folder" });
 
   // Merge base repo data types (on disk: src/_game_data/source/data_types)
   const BASE_DT_DIR = path.join(GD_ROOT, "source", "data_types");
-  dtCount += mergeDataTypes(dataTypesFolder, BASE_DT_DIR);
+  mergeDataTypes(dtFolder, BASE_DT_DIR);
 
   for (const sysName of fs.readdirSync(SYS_ROOT)) {
     const sysDir = path.join(SYS_ROOT, sysName);
@@ -370,8 +411,19 @@ mountExternalPackages(project.tree.ReplicatedStorage);
     // systems/<name>/data_types
     const dtRoot = path.join(sysDir, "data_types");
     if (isDir(dtRoot)) {
-      dtCount += mergeDataTypes(dataTypesFolder, dtRoot);
+      mergeDataTypes(dtFolder, dtRoot);
     }
+
+    // systems/<name>/monetisation
+    // Ensure the same Monetisation.product_defs node exists (created in buildServer)
+    const monNode = serverRoot.Monetisation || ensureFolder(serverRoot, "Monetisation");
+    const productDefsFolder = monNode.product_defs || (monNode.product_defs = { $className: "Folder" });
+
+    // Create a per-system subfolder to avoid filename collisions
+    const sysBucket = ensureFolder(productDefsFolder, sysName);
+
+    // systems/<Sys>/monetisation
+    mergeFlatModules(sysBucket, path.join(sysDir, "monetisation"));
 
     // shared parts
     const shRoot = path.join(sysDir, "shared");
@@ -381,11 +433,6 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       mergeSystemLeaf(ensureFolder(sharedRoot, "Config"), path.join(shRoot, "config"));
       mergeSystemLeaf(sharedClasses,                      path.join(shRoot, "classes"));
     }
-  }
-
-  // Attach data types once after all merging is done, iff we actually have any data types
-  if (dtCount > 0) {
-    gdm.data_types = dataTypesFolder;
   }
 })();
 

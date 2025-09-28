@@ -208,7 +208,7 @@ end
 -- ========= Server branch =========
 do
     local ServerScriptService = game:GetService("ServerScriptService")
-    local ProductDefs = require(ServerScriptService:WaitForChild("Server"):WaitForChild("Monetisation"):WaitForChild("ProductDefs"))
+    local ProductDefs = require(ServerScriptService:WaitForChild("Server"):WaitForChild("Monetisation"):WaitForChild("Aggregator"))
 
     local _devByName = (ProductDefs.items and ProductDefs.items.devProducts) or {}
     local _gpByName  = (ProductDefs.items and ProductDefs.items.gamepasses)  or {}
