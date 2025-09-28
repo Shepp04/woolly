@@ -145,6 +145,25 @@ function mergeSystemLeaf(destParent, leafAbs) {
   }
 }
 
+function mergeDataTypes(destObj, srcDir) {
+  console.log("Merging", destObj, srcDir);
+  if (!isDir(srcDir)) return 0;
+  let added = 0;
+
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    const full = path.join(srcDir, entry.name);
+    console.log(added, ":", full)
+    if (entry.isDirectory()) {
+      added += mergeDataTypes(destObj, full); // recurse
+    } else if (entry.isFile() && LU(entry.name)) {
+      const nodeName = stripExt(entry.name);
+      setFileNode(destObj, nodeName, full); // overlay wins
+      added++;
+    }
+  }
+  return added;
+}
+
 // Helper: mount base, then overlay (overlay wins by name)
 function overlaySection(parent, nodeName, baseAbs, overAbs) {
   const overlayIsFB = isDir(overAbs) && hasInit(overAbs);
@@ -261,11 +280,26 @@ mountExternalPackages(project.tree.ReplicatedStorage);
   // Folder-backed registries
   overlaySection(serverRoot, "Services",       path.join(SRC_SERVER, "services"),     path.join(OV_SERVER, "services"));
   overlaySection(serverRoot, "Packages",       path.join(SRC_SERVER, "packages"),     path.join(OV_SERVER, "packages"));
-  overlaySection(serverRoot, "GameDataMaster", path.join(GD_ROOT, "source"),          path.join(OV_SERVER, "game_data_master"));
   overlaySection(serverRoot, "Monetisation",   path.join(MON_ROOT, "source"),         path.join(OV_SERVER, "monetisation"));
 
   // Classes (server)
   overlaySection(serverRoot, "Classes",        path.join(SRC_SERVER, "classes"),      path.join(OV_SERVER, "classes"));
+
+  // --- New: map GameDataMaster as a single ModuleScript if present
+  const gdmFileBase = path.join(GD_ROOT, "source", "GameDataMaster.luau");
+  const gdmFileOv   = path.join(OV_SERVER, "game_data_master", "GameDataMaster.luau");
+
+  if (isFile(gdmFileOv)) {
+    addFile(serverRoot, "GameDataMaster", gdmFileOv);
+  } else if (isFile(gdmFileBase)) {
+    addFile(serverRoot, "GameDataMaster", gdmFileBase);
+  } else {
+    // fallback to old behavior if someone hasn't renamed the file yet
+    overlaySection(serverRoot, "GameDataMaster",
+      path.join(GD_ROOT, "source"),
+      path.join(OV_SERVER, "game_data_master")
+    );
+  }
 })();
 
 // ====== Build: Client (base + overlay) ======
@@ -304,6 +338,16 @@ mountExternalPackages(project.tree.ReplicatedStorage);
   const assets = ensureFolder(sharedRoot, "Assets");
   const ui = ensureFolder(assets, "UI");
   const models = ensureFolder(assets, "Models");
+  
+  const gdm = serverRoot.GameDataMaster || ensureFolder(serverRoot, "GameDataMaster");
+  
+  // Build ONE synthetic data_types folder
+  const dataTypesFolder = { $className: "Folder" };
+  let dtCount = 0;
+
+  // Merge base repo data types (on disk: src/_game_data/source/data_types)
+  const BASE_DT_DIR = path.join(GD_ROOT, "source", "data_types");
+  dtCount += mergeDataTypes(dataTypesFolder, BASE_DT_DIR);
 
   for (const sysName of fs.readdirSync(SYS_ROOT)) {
     const sysDir = path.join(SYS_ROOT, sysName);
@@ -322,8 +366,11 @@ mountExternalPackages(project.tree.ReplicatedStorage);
     if (isDir(sRoot)) {
       mergeSystemLeaf(ensureFolder(serverRoot, "Services"), path.join(sRoot, "services"));
       mergeSystemLeaf(ensureFolder(serverRoot, "Packages"), path.join(sRoot, "packages"));
-      mergeSystemLeaf(serverClasses,                         path.join(sRoot, "classes"));
+      mergeSystemLeaf(serverClasses,                        path.join(sRoot, "classes"));
     }
+
+    const dtRoot = path.join(sysDir, "data_types");
+    if (isDir(dtRoot)) dtCount += mergeDataTypes(dataTypesFolder, dtRoot);
 
     // shared parts
     const shRoot = path.join(sysDir, "shared");
@@ -332,6 +379,12 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       mirrorAssets(models, path.join(shRoot, "assets", "models"));
       mergeSystemLeaf(ensureFolder(sharedRoot, "Config"), path.join(shRoot, "config"));
       mergeSystemLeaf(sharedClasses,                      path.join(shRoot, "classes"));
+    }
+
+    // Attach ONLY ONCE if we added anything.
+    // This explicit child overrides any real folder with same name that $path would have mounted.
+    if (dtCount > 0) {
+      gdm.data_types = dataTypesFolder;
     }
   }
 })();

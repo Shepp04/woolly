@@ -13,25 +13,40 @@ src
 │       ├── init.luau
 │       └── ProductDefs.luau
 ├── _systems
-│   └── _TemplateSystem
+│   ├── TemplateSystem
+│   │   ├── client
+│   │   │   ├── components
+│   │   │   ├── controllers
+│   │   │   └── utils
+│   │   ├── data_types
+│   │   │   └── Fruits.luau
+│   │   ├── server
+│   │   │   ├── classes
+│   │   │   ├── packages
+│   │   │   └── services
+│   │   └── shared
+│   │       ├── assets
+│   │       │   ├── models
+│   │       │   └── ui
+│   │       ├── classes
+│   │       └── config
+│   └── TemplateSystem copy
 │       ├── client
 │       │   ├── components
-│       │   │   └── _TemplateComponent2.luau
 │       │   ├── controllers
-│       │   │   └── _TemplateController2.luau
 │       │   └── utils
-│       │       └── _TemplateUtil2.luau
+│       ├── data_types
+│       │   └── Fruits2.luau
 │       ├── server
+│       │   ├── classes
 │       │   ├── packages
-│       │   │   └── _TemplatePackage2.luau
 │       │   └── services
-│       │       └── _TemplateService2.luau
 │       └── shared
 │           ├── assets
 │           │   ├── models
 │           │   └── ui
+│           ├── classes
 │           └── config
-│               └── _TemplateConfig2.luau
 ├── _types
 │   ├── Data.luau
 │   ├── init.luau
@@ -42,6 +57,7 @@ src
 │   │   └── _TemplateComponent.luau
 │   ├── controllers
 │   │   ├── _TemplateController.luau
+│   │   ├── init.luau
 │   │   └── UX
 │   │       ├── BouncingButton.luau
 │   │       ├── ColourChange.luau
@@ -50,9 +66,11 @@ src
 │   │       ├── RotatingElement.luau
 │   │       └── SwingingElement.luau
 │   └── utils
-│       └── _TemplateUtil.luau
+│       ├── _TemplateUtil.luau
+│       └── GuiRefs.luau
 ├── server
 │   ├── Bootstrap.server.luau
+│   ├── classes
 │   ├── packages
 │   │   ├── _TemplatePackage.luau
 │   │   ├── DataManager.luau
@@ -68,9 +86,11 @@ src
 │   │   ├── models
 │   │   └── ui
 │   │       └── MonetisationOverlay.rbxmx
+│   ├── classes
 │   ├── config
 │   │   ├── _TemplateConfig.luau
 │   │   ├── Data.luau
+│   │   ├── General.luau
 │   │   ├── init.luau
 │   │   ├── Players.luau
 │   │   └── Sounds.luau
@@ -84,4 +104,4 @@ src
 │       └── Sounds.luau
 └── tree.txt
 
-37 directories, 48 files
+58 directories, 47 files

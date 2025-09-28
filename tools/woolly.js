@@ -469,6 +469,9 @@ function createSystem(name, parentAbsOrNull) {
   ensureDir(path.join(base, "shared/classes"));
   ensureDir(path.join(base, "shared/config"));
 
+  // data types
+  ensureDir(path.join(base, "data_types"));
+  
   console.log("✓ created system scaffold at", path.relative(process.cwd(), base));
   return [];
 }
