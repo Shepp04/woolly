@@ -1,25 +1,24 @@
 --!strict
-local RunService = game:GetService("RunService")
+-- // Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
-local Packages = require(ReplicatedStorage.Shared.Packages)
-local Config = require(ReplicatedStorage.Shared.Config)
+local Types = require(ReplicatedStorage.Shared.Types.Controllers)
 
--- Optional: bring in typed registry if you keep client types
--- local Types = require(ReplicatedStorage.Shared.Types.Controllers)
+local ControllersFolder = script -- folder-backed; children are controller ModuleScripts
 
+-- Generic controller type
+export type Registry = Types.Registry
 export type Controller = {
-	Priority: number?, -- lower runs earlier
-	Init: (self: Controller, deps: any?) -> (),
-	Start: (self: Controller) -> (),
-	Destroy: (self: Controller) -> (),
-	Controllers: any?, -- backref to registry
+    Priority: number?, -- lowest first
+    Init: (self: Controller, deps: any) -> (),
+    Start: (self: Controller) -> (),
+    Destroy: (self: Controller) -> (),
+    Controllers: Controller?,
 }
 
-type Registry = {
+type ControllersAPI = Registry & {
 	_registry: { [string]: Controller },
-	_ordered: { Controller },
 	_inited: boolean,
 	_started: boolean,
 
@@ -30,15 +29,18 @@ type Registry = {
 	List: () -> { string },
 }
 
-local Controllers: Registry = {
+local API: ControllersAPI = {
 	_registry = {},
-	_ordered = {},
 	_inited = false,
 	_started = false,
 }
 
-local ControllersFolder = script -- folder-backed; children are controller ModuleScripts
+-- ========== Internal ========== --
 
+-- sorted list for lifecycle calls
+local _ordered: { Controller } = {}
+
+-- Discover and require all ModuleScripts directly under this folder
 local function _loadAll()
 	for _, child in ipairs(ControllersFolder:GetChildren()) do
 		if child:IsA("ModuleScript") and child.Name ~= "init" then
@@ -49,19 +51,20 @@ local function _loadAll()
 			if type(mod) ~= "table" then
 				error(("[Controllers] %s did not return a table"):format(child.Name))
 			end
-			Controllers._registry[child.Name] = mod :: Controller
+			API._registry[child.Name] = mod :: Controller
 		end
 	end
 end
 
+-- Build deterministic order by priority, with lowest first
 local function _rebuildOrder()
-	Controllers._ordered = {}
-	for _, c in pairs(Controllers._registry) do
-		table.insert(Controllers._ordered, c);
+	_ordered = {}
+	for _, c in pairs(API._registry) do
+		table.insert(_ordered, c);
 		-- give each controller a backref (like Services)
-		(c :: any).Controllers = Controllers._registry
+		(c :: any).Controllers = API._registry
 	end
-	table.sort(Controllers._ordered, function(a, b)
+	table.sort(_ordered, function(a, b)
 		local pa = a.Priority or 100
 		local pb = b.Priority or 100
 		if pa == pb then
@@ -71,67 +74,89 @@ local function _rebuildOrder()
 	end)
 end
 
-function Controllers.InitAll(extraDeps: any?)
-	if Controllers._inited then return end
+--[[
+    .InitAll(extraDeps?)
+    Requires/collects all controllers once and injects deps.
+    Calls :Init(deps) in priority order 
+]]
+function API.InitAll(extraDeps: any?)
+	if API._inited then return end
 	_loadAll()
 
 	local localPlayer = Players.LocalPlayer
 	local playerGui = localPlayer:WaitForChild("PlayerGui") :: PlayerGui
 
 	local deps = extraDeps or {}
-	deps.Controllers = Controllers._registry
-	deps.Packages = Packages
-	deps.Config = Config
-	deps.LocalPlayer = localPlayer
-	deps.PlayerGui = playerGui
-
+	deps.Controllers = API._registry
+	
 	_rebuildOrder()
 
-	for _, c in ipairs(Controllers._ordered) do
+	for _, c in ipairs(_ordered) do
 		if typeof((c :: any).Init) == "function" then
 			(c :: any):Init(deps)
 		end
 	end
 
-	Controllers._inited = true
+	API._inited = true
 end
 
-function Controllers.StartAll()
-	if not Controllers._inited or Controllers._started then return end
-	for _, c in ipairs(Controllers._ordered) do
+--[[
+    .StartAll()
+    Calls :Start() in priority order after InitAll
+]]
+function API.StartAll()
+	if not API._inited or API._started then return end
+	for _, c in ipairs(_ordered) do
 		if typeof((c :: any).Start) == "function" then
 			(c :: any):Start()
 		end
 	end
-	Controllers._started = true
+	API._started = true
 end
 
-function Controllers.DestroyAll()
-	for i = #Controllers._ordered, 1, -1 do
-		local c = Controllers._ordered[i]
+--[[
+    .DestroyAll()
+    Calls :Destroy() in reverse order so that dependencies stop last
+]]
+function API.DestroyAll()
+	for i = #_ordered, 1, -1 do
+		local c = _ordered[i]
 		if typeof((c :: any).Destroy) == "function" then
 			pcall(function() (c :: any):Destroy() end)
 		end
 	end
-	Controllers._started = false
-	Controllers._inited = false
+	API._started = false
+	API._inited = false
 end
 
-function Controllers.Get<T>(name: string): T
-	local c = Controllers._registry[name]
+--[[
+    .Get(name: string)
+    Typed accessor for a controller by module name
+    e.g local CurrencyService = Controllers:Get("CurrencyService")
+]]
+function API.Get<T>(name: string): T
+	local c = API._registry[name]
 	if not c then
 		error(("[Controllers] Unknown controller '%s'"):format(name))
 	end
 	return (c :: any) :: T
 end
 
-function Controllers.List(): { string }
+--[[
+    .List()
+    Returns an array of controller names in priority order
+]]
+function API.List(): { string }
 	local names = {}
-	for name in pairs(Controllers._registry) do
+	for name in pairs(API._registry) do
 		table.insert(names, name)
 	end
 	table.sort(names)
 	return names
 end
 
-return Controllers
+function API.AsTyped(): Registry
+    return (API._registry :: any) :: Registry
+end
+
+return API :: Registry
