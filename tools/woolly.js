@@ -58,7 +58,10 @@ function overridesRootFor(place) {
   return fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? abs : null;
 }
 
-function sourceRootFor(place) {
+function sourceRootFor(place, preferSrc = false) {
+  // If preferSrc is true, ignore overrides and use /src
+  if (preferSrc) return SRC_DIR;
+
   // If overrides/<place> exists, use it; else use /src
   const ov = overridesRootFor(place);
   console.log("Override place found:", ov);
@@ -412,12 +415,12 @@ const CLASS_DIRS = {
   server: "src/server/classes",
 };
 
-function baseDirFor(kind, place, explicitAt) {
+function baseDirFor(kind, place, explicitAt, preferSrc = false) {
   // If user passed --at, honor it absolutely.
   if (explicitAt) return path.resolve(REPO, explicitAt);
 
   // Otherwise use place-specific root if it exists, else src.
-  const root = sourceRootFor(place);
+  const root = sourceRootFor(place, preferSrc);
   switch (kind) {
     case "service":    return path.join(root, "server/services");
     case "controller": return path.join(root, "client/controllers");
@@ -733,7 +736,8 @@ if (cmd === "create") {
   const atDirOpt = getFlag("--at");
   const placeOpt = getFlag("--place");
   const place = resolvePlace(placeOpt);
-
+  const preferSrc = !placeOpt;
+  
   // class-specific flags
   const target = getFlag("--target");
   const both = hasFlag("--both");
@@ -765,10 +769,10 @@ if (cmd === "create") {
         baseAbs = path.resolve(REPO, atDirOpt);
       } else if (systemName) {
         // If a system is specified, target its data_types folder
-        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "server", "services");
+        baseAbs = path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "server", "services");
       } else {
         // Fall back to global game data folder
-        baseAbs = baseDirFor("service", place, null);
+        baseAbs = baseDirFor("service", place, null, preferSrc);
       }
       
       created = createService(name, baseAbs);
@@ -780,10 +784,10 @@ if (cmd === "create") {
         baseAbs = path.resolve(REPO, atDirOpt);
       } else if (systemName) {
         // If a system is specified, target its data_types folder
-        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "client", "controllers");
+        baseAbs = path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "client", "controllers");
       } else {
         // Fall back to global game data folder
-        baseAbs = baseDirFor("controller", place, null);
+        baseAbs = baseDirFor("controller", place, null, preferSrc);
       }
 
       created = createController(name, baseAbs);
@@ -795,10 +799,10 @@ if (cmd === "create") {
         baseAbs = path.resolve(REPO, atDirOpt);
       } else if (systemName) {
         // If a system is specified, target its client/components folder
-        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "client", "components");
+        baseAbs = path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "client", "components");
       } else {
         // Fall back to global game data folder
-        baseAbs = baseDirFor("component", place, null);
+        baseAbs = baseDirFor("component", place, null, preferSrc);
       }
 
       // baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("component", place, null);
@@ -806,7 +810,7 @@ if (cmd === "create") {
       break;
     }
     case "system": {
-      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("system", place, null);
+      baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("system", place, null, preferSrc);
       created = createSystem(name, baseAbs);
       break;
     }
@@ -816,10 +820,10 @@ if (cmd === "create") {
         baseAbs = path.resolve(REPO, atDirOpt);
       } else if (systemName) {
         // If a system is specified, target its data_types folder
-        baseAbs = path.join(sourceRootFor(place), "_systems", systemName, "data_types");
+        baseAbs = path.join(sourceRootFor(place, true), "_systems", systemName, "data_types");
       } else {
         // Fall back to global game data folder
-        baseAbs = baseDirFor("data_type", place, null);
+        baseAbs = baseDirFor("data_type", place, null, true);
       }
       
       created = createDataType(name, baseAbs);
@@ -829,13 +833,13 @@ if (cmd === "create") {
       // default roots for classes (place-aware)
       const sharedRoot = atDirOpt ? path.resolve(REPO, atDirOpt) :
         (systemName
-          ? path.join(sourceRootFor(place), "_systems", systemName, "shared/classes")
-          : baseDirFor("class_shared", place, null));
+          ? path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "shared/classes")
+          : baseDirFor("class_shared", place, null, preferSrc));
 
       const serverRoot = atDirOpt ? path.resolve(REPO, atDirOpt) :
         (systemName
-          ? path.join(sourceRootFor(place), "_systems", systemName, "server/classes")
-          : baseDirFor("class_server", place, null));
+          ? path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "server/classes")
+          : baseDirFor("class_server", place, null, preferSrc));
 
       const made = [];
 
