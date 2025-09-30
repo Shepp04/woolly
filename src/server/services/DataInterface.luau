@@ -11,6 +11,26 @@ local DataManager = Packages.DataManager
 local Types = require(ReplicatedStorage.Shared.Types.Data)
 export type PlayerProfile = Types.PlayerProfile
 
+export type DataInterfaceAPI = {
+	-- Lifecycle
+	Init: (self: DataInterfaceAPI) -> DataInterfaceAPI,
+
+	-- Data
+	GetPlayerProfile: (self: DataInterfaceAPI, player: Player, yield: boolean?) -> PlayerProfile?,
+	LoadPlayerProfile: (self: DataInterfaceAPI, player: Player) -> PlayerProfile?,
+	LoadPlayerProfileAsync: (self: DataInterfaceAPI, player: Player) -> Promise<PlayerProfile>,
+	GetPlayerProfilePromise: (self: DataInterfaceAPI, player: Player) -> Promise<PlayerProfile>,
+	ReleasePlayerProfile: (self: DataInterfaceAPI, player: Player) -> boolean,
+
+	-- Reconcile
+	RegisterReconcileSection: (
+		self: DataInterfaceAPI,
+		sectionType: "Info" | "Data",
+		sectionName: string,
+		template: {}
+	) -> boolean,
+}
+
 local DataInterface = {}
 
 local _inited = false
@@ -96,4 +116,4 @@ function DataInterface:Init()
 	return self
 end
 
-return DataInterface
+return DataInterface :: DataInterfaceAPI
