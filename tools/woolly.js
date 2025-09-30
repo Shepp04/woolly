@@ -2,8 +2,8 @@
 /* Woolly CLI
    New commands:
      woolly gen [Place]            -> node tools/genRojoTree.js Place
-     woolly serve [Place]          -> rojo serve places/Place.project.json
-     woolly build [Place]          -> rojo build places/Place.project.json -o builds/Place.rbxl
+     woolly serve [Place]          -> rojo serve Place.project.json
+     woolly build [Place]          -> rojo build Place.project.json -o builds/Place.rbxl
      woolly switch <Place>         -> set default place in .woollyrc.json
      woolly create <kind> <Name> [--at <dir>] [--place <Place>] [class flags...]
        kinds: service | controller | component | system | data_type | class
@@ -15,7 +15,7 @@ const path = require("path");
 const cp  = require("child_process");
 
 const REPO = path.join(__dirname, "..");
-const PLACES_DIR = path.join(REPO, "places");
+const PLACES_DIR = REPO;
 const OVERRIDES_DIR = path.join(REPO, "place_overrides");
 const SRC_DIR = path.join(REPO, "src");
 const CONFIG_PATH = path.join(REPO, ".woollyrc.json");
@@ -582,11 +582,16 @@ function createPlace(name) {
   let r = run("node", ["tools/genRojoTree.js", pas]);
   if (r.status !== 0) return r.status;
 
+  // generate types for intellisense
+  const place = resolvePlace(sub);
+  r = run("node", ["tools/genTypes.js", place]);
+  if (r.status !== 0) return r.status;
+
   // build output (build-<place>.rbxl)
   console.log(`→ Building ${pas}`);
   ensureDir("builds");
   const outName = path.join("builds", `build-${pas}.rbxl`);
-  r = run("rojo", ["build", `places/${pas}.project.json`, "-o", outName]);
+  r = run("rojo", ["build", `${pas}.project.json`, "-o", outName]);
   if (r.status !== 0) return r.status;
 
   console.log(`✓ Built ${outName}`);
@@ -600,7 +605,7 @@ Woolly CLI
 
   setup [Place]           Install deps, generate project, build, then serve
 
-  gen [Place]             Generate places/<Place>.project.json (default: current place)
+  gen [Place]             Generate <Place>.project.json (default: current place)
   serve [Place]           Run 'rojo serve' for that place
   build [Place]           Build 'builds/<Place>.rbxl' for that place
   switch <Place>          Make <Place> the default place in .woollyrc.json
@@ -683,8 +688,14 @@ if (cmd === "switch") {
 
 if (cmd === "gen") {
   const place = resolvePlace(sub);
-  const res = run("node", ["tools/genRojoTree.js", place]);
-  process.exit(res.status);
+  let r = run("node", ["tools/genRojoTree.js", place]);
+  if (r.status !== 0) process.exit(r.status);
+
+  // generate types for intellisense
+  r = run("node", ["tools/genTypes.js", place]);
+  if (r.status !== 0) return process.exit(r.status);
+
+  process.exit(r.status);
 }
 
 if (cmd === "serve") {
@@ -695,7 +706,7 @@ if (cmd === "serve") {
     const gen = run("node", ["tools/genRojoTree.js", place]);
     if (gen.status !== 0) process.exit(gen.status);
   }
-  const res = run("rojo", ["serve", path.relative(REPO, project)]);
+  const res = run("rojo", ["serve", path.basename(project)]);
   process.exit(res.status);
 }
 
@@ -708,8 +719,8 @@ if (cmd === "build") {
     if (gen.status !== 0) process.exit(gen.status);
   }
   ensureDir(path.join(REPO, "builds"));
-  const out = path.join(REPO, "builds", `${place}.rbxl`);
-  const res = run("rojo", ["build", path.relative(REPO, project), "-o", path.relative(REPO, out)]);
+  const out = path.join(REPO, "builds", `${place}.rbxlx`);
+  const res = run("rojo", ["build", path.basename(project), "-o", path.relative(REPO, out)]);
   process.exit(res.status);
 }
 

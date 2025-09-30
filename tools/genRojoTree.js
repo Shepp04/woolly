@@ -14,8 +14,8 @@ if (!PLACE || !/^[A-Za-z0-9_-]+$/.test(PLACE)) {
 const REPO_ROOT  = path.join(__dirname, "..");
 const SRC_BASE   = path.join(REPO_ROOT, "src");
 const OV_BASE    = path.join(REPO_ROOT, "place_overrides", PLACE);
-const OUT_DIR    = path.join(REPO_ROOT, "places");
-const OUT_PATH   = path.join(OUT_DIR, `${PLACE}.project.json`);
+const OUT_DIR    = REPO_ROOT;
+const OUT_PATH   = path.join(REPO_ROOT, `${PLACE}.project.json`);
 const REL_BASE = path.dirname(OUT_PATH);
 
 const SRC_SHARED = path.join(SRC_BASE, "shared");
