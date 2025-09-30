@@ -15,15 +15,15 @@ export type Deps = {
     SharedPackages: any,
 }
 
-export type PlayerService = {
+export type PlayerServiceAPI = {
     _inited: boolean,
     _started: boolean,
     _conns: { RBXScriptConnection },
     _playerConns: { [Player]: { RBXScriptConnection } },
 
-    Init: (self: PlayerService, deps: Deps) -> (),
-    Start: (self: PlayerService) -> (),
-    Destroy: (self: PlayerService) -> (),
+    Init: (self: PlayerServiceAPI, deps: Deps) -> (),
+    Start: (self: PlayerServiceAPI) -> (),
+    Destroy: (self: PlayerServiceAPI) -> (),
 }
 
 local PlayerService = {
@@ -146,4 +146,4 @@ function PlayerService:Destroy()
     self._inited = false
 end
 
-return PlayerService
+return PlayerService :: PlayerServiceAPI

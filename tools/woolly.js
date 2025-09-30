@@ -139,83 +139,163 @@ const toPascal = (s) => {
 const tmplService = (Name) => `--!strict
 -- ${Name} (Service) — lifecycle-first singleton discovered by Services registry.
 
-export type Deps = { Services: any }
-export type ${Name} = {
+-- // Roblox Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+-- // Types (generated)
+local ServicesTypes = require(ReplicatedStorage.Shared.Types.Services)
+
+-- // Type aliases for deps inferred from real modules
+type ServiceRegistry = ServicesTypes.Registry
+
+type DataInterface  = ServicesTypes.DataInterface
+type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
+type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
+type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
+type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+
+export type Deps = {
+\tDataInterface: DataInterface,
+\tSharedPackages: SharedPackages,
+\tGameData: GameData,
+\tMonetisation: Monetisation,
+\tConfig: Config,
+}
+
+export type ${Name}API = {
+\t_inited: boolean,
+\t_started: boolean,
+\t_conns: { RBXScriptConnection },
 \tPriority: number?,
-\tInit: (self: ${Name}, deps: Deps) -> (),
-\tStart: (self: ${Name}) -> (),
-\tDestroy: (self: ${Name}) -> (),
-\tServices: any?, -- auto-filled
+\tServices: ServiceRegistry, -- optional backref to the registry, filled by bootstrapper
+
+\tInit: (self: ${Name}API, deps: Deps) -> (),
+\tStart: (self: ${Name}API) -> (),
+\tDestroy: (self: ${Name}API) -> (),
 }
 
 local ${Name} = {
-\tPriority = 100,
 \t_inited = false,
 \t_started = false,
 \t_conns = {},
-\tServices = nil,
+\tPriority = 50, -- higher -> starts earlier
+\tServices = {} :: ServiceRegistry,
 }
+
+-- Private captured deps for intellisense-friendly access
+local _deps: Deps?
+
+-- ========== Life Cycle ========== --
 
 function ${Name}:Init(deps: Deps)
 \tif self._inited then return end
 \tself._inited = true
-\tself.Services = deps.Services
-\t-- init here
+\tself._conns = {}
+\t_deps = deps
+
+\t-- // Example: get/create remotes
 end
 
 function ${Name}:Start()
 \tif not self._inited or self._started then return end
 \tself._started = true
-\t-- start here
+
+\t-- // Example: connect remotes, start loops, etc.
 end
 
 function ${Name}:Destroy()
-\tfor _, c in self._conns do pcall(function() c:Disconnect() end) end
+\tfor _, conn in self._conns do
+\t\tpcall(function() conn:Disconnect() end)
+\tend
 \ttable.clear(self._conns)
+\t_deps = nil
 \tself._started = false
 \tself._inited = false
 end
 
-return ${Name}
+return ${Name} :: ${Name}API
 `;
 
 const tmplController = (Name) => `--!strict
 -- ${Name} (Controller) — client controller discovered by Controllers registry.
 
-export type ${Name} = {
+-- // Roblox Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+-- // Types (generated)
+local ControllersTypes = require(ReplicatedStorage.Shared.Types.Controllers)
+
+-- // Type aliases for deps inferred from real modules
+type ControllerRegistry = ControllersTypes.Registry
+
+type ReplicatedData = typeof(require(ReplicatedStorage.Shared.Packages.ReplicatedData))
+type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
+type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
+type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
+type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+
+export type Deps = {
+\tReplicatedData: ReplicatedData,
+\tSharedPackages: SharedPackages,
+\tGameData: GameData,
+\tMonetisation: Monetisation,
+\tConfig: Config,
+}
+
+export type ${Name}API = {
+\t_inited: boolean,
+\t_started: boolean,
+\t_conns: { RBXScriptConnection },
 \tPriority: number?,
-\tInit: (self: ${Name}) -> (),
-\tStart: (self: ${Name}) -> (),
-\tDestroy: (self: ${Name}) -> (),
+\tControllers: ControllerRegistry, -- optional backref to the registry, filled by bootstrapper
+
+\tInit: (self: ${Name}API, deps: Deps) -> (),
+\tStart: (self: ${Name}API) -> (),
+\tDestroy: (self: ${Name}API) -> (),
 }
 
 local ${Name} = {
-\tPriority = 100,
 \t_inited = false,
 \t_started = false,
 \t_conns = {},
-}
+\tPriority = 50, -- higher -> starts earlier
+\tControllers = {} :: ControllerRegistry,
+} :: ${Name}API
 
-function ${Name}:Init()
+-- Private captured deps for intellisense-friendly access
+local _deps: Deps?
+
+-- ========== Life Cycle ========== --
+
+function ${Name}:Init(deps: Deps)
 \tif self._inited then return end
 \tself._inited = true
-\t-- init UI state / refs
+\tself._conns = {}
+\t_deps = deps
+
+\t-- // Example: get remotes / find UI elements
 end
 
 function ${Name}:Start()
 \tif not self._inited or self._started then return end
 \tself._started = true
-\t-- hook events
+
+\t-- // Example: connect remotes, bind UI, start loops, etc.
 end
 
 function ${Name}:Destroy()
-\tfor _, c in self._conns do pcall(function() c:Disconnect() end) end
+\tfor _, conn in self._conns do
+\t\tpcall(function() conn:Disconnect() end)
+\tend
 \ttable.clear(self._conns)
+\t_deps = nil
 \tself._started = false
 \tself._inited = false
 end
 
-return ${Name}
+return ${Name} :: ${Name}API
 `;
 
 const tmplComponent = (Name) => `--!strict
@@ -230,11 +310,15 @@ export type ${Name} = {
 local ${Name} = {}
 ${Name}.__index = ${Name}
 
+-- ========== Constructor ========== --
+
 function ${Name}.new(...)
 \tlocal self = setmetatable({ _inited = false }, ${Name})
 \t-- capture args
 \treturn self
 end
+
+-- ========== Life Cycle ========== --
 
 function ${Name}:Init()
 \tif self._inited then return end
@@ -288,124 +372,152 @@ local DataTypeDict: DataTypeDict = {
 return DataTypeDict
 `;
 
-function tmplSharedClass(name) {
+function tmplSharedClass(Name) {
   return `--!strict
--- ${name} (Shared Class)
+-- ${Name} (Shared Class) — usable on client or server.
 
--- // Services
-local RunService = game:GetService("RunService")
+-- // Roblox Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+-- // Type aliases for deps
+type ReplicatedData = typeof(require(ReplicatedStorage.Shared.Packages.ReplicatedData))
+type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
+type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
+type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
+type Config         = typeof(require(ReplicatedStorage.Shared.Config))
 
 export type Deps = {
-  Config: any?,
-  GameData: any?,
-  Monetisation: any?,
+\tReplicatedData: ReplicatedData,
+\tSharedPackages: SharedPackages,
+\tGameData: GameData,
+\tMonetisation: Monetisation,
+\tConfig: Config,
 }
 
-export type ${name} = {
-  _deps: Deps,
-  _opts: { [string]: any },
-  _conns: { RBXScriptConnection },
-
-  Init: (self: ${name}) -> (),
-  Destroy: (self: ${name}) -> (),
-
-  FormatCurrency: (self: ${name}, currencyId: string, amount: number) -> string,
+export type Opts = {
+\t-- args used when constructing the class
 }
 
-local ${name} = {}
-${name}.__index = ${name}
+export type ${Name}API = {
+\t_opts: Opts,
+\t_conns: { RBXScriptConnection },
 
-function ${name}.new(deps: Deps, opts: { [string]: any }?): ${name}
-  local self = setmetatable({
-    _deps = deps or {},
-    _opts = opts or {},
-    _conns = {},
-  }, ${name})
-  return self
+\tInit: (self: ${Name}API) -> (),
+\tDestroy: (self: ${Name}API) -> (),
+}
+
+local ${Name} = {}
+${Name}.__index = ${Name}
+
+-- Private captured deps
+local _deps: Deps?
+
+-- ========== Constructor ========== --
+
+function ${Name}.new(deps: Deps, opts: Opts?): ${Name}API
+\t_deps = deps
+
+\tlocal self = setmetatable({} :: any, ${Name}) :: ${Name}API
+\tself._opts = opts or {}
+\tself._conns = {}
+
+\treturn self
 end
 
-function ${name}:Init()
-  if RunService:IsClient() then
-    -- client-only wiring
-  else
-    -- server-only wiring
-  end
+-- ========== Life Cycle ========== --
+
+function ${Name}:Init()
+\t-- Client/server-specific wiring if needed
+\tif RunService:IsClient() then
+\t\t-- client-only setup
+\telse
+\t\t-- server-only setup
+\tend
 end
 
-function ${name}:FormatCurrency(currencyId: string, amount: number): string
-  local Config = self._deps.Config
-  if Config and Config.Currency and Config.Currency.GetCurrencyText then
-    return Config.Currency:GetCurrencyText(currencyId, amount)
-  end
-  return tostring(amount) .. " " .. currencyId
+function ${Name}:Destroy()
+\tfor _, c in self._conns do
+\t\tpcall(function() c:Disconnect() end)
+\tend
+\ttable.clear(self._conns)
+\t_deps = nil
 end
 
-function ${name}:Destroy()
-  for _, c in self._conns do pcall(function() c:Disconnect() end) end
-  table.clear(self._conns)
-end
-
-return ${name}
+return ${Name} :: ${Name}API
 `;
 }
 
-function tmplServerClass(name) {
+function tmplServerClass(Name) {
   return `--!strict
--- ${name} (Server Class)
+-- ${Name} (Server Class)
 
--- // Services
+-- // Roblox Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+-- // Types
+local ServicesTypes = require(ReplicatedStorage.Shared.Types.Services)
+
+-- // Type aliases for deps
+type ServiceRegistry = ServicesTypes.Registry
+
+type ReplicatedData = typeof(require(ReplicatedStorage.Shared.Packages.ReplicatedData))
+type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
+type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
+type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
+type Config         = typeof(require(ReplicatedStorage.Shared.Config))
 
 export type Deps = {
-  Services: any,
-  Config: any?,
-  GameData: any?,
+\tReplicatedData: ReplicatedData,
+\tServices: ServiceRegistry,
+\tSharedPackages: SharedPackages,
+\tGameData: GameData,
+\tMonetisation: Monetisation,
+\tConfig: Config,
 }
 
-export type ${name} = {
-  _deps: Deps,
-  _opts: { [string]: any },
-  _conns: { RBXScriptConnection },
-
-  Init: (self: ${name}) -> (),
-  Destroy: (self: ${name}) -> (),
-
-  Spend: (self: ${name}, player: Player, currencyId: string, amount: number) -> boolean,
+export type Opts = {
+\t-- args used when constructing the class
 }
 
-local ${name} = {}
-${name}.__index = ${name}
+export type ${Name}API = {
+\t_opts: Opts,
+\t_conns: { RBXScriptConnection },
 
-function ${name}.new(deps: Deps, opts: { [string]: any }?): ${name}
-  assert(deps ~= nil and deps.Services ~= nil, "${name}.new => deps.Services is required")
-  local self = setmetatable({
-    _deps = deps,
-    _opts = opts or {},
-    _conns = {},
-  }, ${name})
-  return self
+\tInit: (self: ${Name}API) -> (),
+\tDestroy: (self: ${Name}API) -> (),
+}
+
+local ${Name} = {}
+${Name}.__index = ${Name}
+
+-- Private captured deps
+local _deps: Deps?
+
+function ${Name}.new(deps: Deps, opts: Opts?): ${Name}API
+\t_deps = deps
+
+\tlocal self = setmetatable({} :: any, ${Name}) :: ${Name}API
+\tself._opts = opts or {}
+\tself._conns = {}
+
+\treturn self
 end
 
-function ${name}:Init()
-  -- local CurrencyService = (self._deps.Services :: any).CurrencyService
+function ${Name}:Init()
+\t-- // Example: connect remotes/events
 end
 
-function ${name}:Spend(player: Player, currencyId: string, amount: number): boolean
-  local CurrencyService = (self._deps.Services :: any).CurrencyService
-  if not CurrencyService then
-    warn("[${name}] CurrencyService not available")
-    return false
-  end
-  return CurrencyService:SpendCurrency(player, currencyId, amount)
+function ${Name}:Destroy()
+\tfor _, c in self._conns do
+\t\tpcall(function() c:Disconnect() end)
+\tend
+\ttable.clear(self._conns)
+\t_deps = nil
 end
 
-function ${name}:Destroy()
-  for _, c in self._conns do pcall(function() c:Disconnect() end) end
-  table.clear(self._conns)
-end
-
-return ${name}
+return ${Name} :: ${Name}API
 `;
 }
 
@@ -869,8 +981,9 @@ if (cmd === "create") {
   if (created.length > 0) openInEditor(created[0]);
 
   // Auto-regenerate mapping for this place
-  const gen = run("node", ["tools/genRojoTree.js", place]);
-  process.exit(gen.status);
+  let r = run("node", ["tools/genRojoTree.js", place]);
+  r = run("node", ["tools/genTypes.js", place]);
+  process.exit(r.status);
 }
 
 // Fallback

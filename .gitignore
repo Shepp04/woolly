@@ -26,3 +26,7 @@ build.rbxlx
 # Local test places
 *.rbxl
 *.rbxlx
+
+# Auto-generated type files
+src/_types/Services.luau
+src/_types/Controllers.luau
