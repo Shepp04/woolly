@@ -17,7 +17,7 @@ export type Service = {
     Services: any?, -- auto-filled reference to the registry
 }
 
-export type ServicesAPI = {
+export type ServicesAPI = Registry & {
     _registry: { [string]: Service },
     _inited: boolean,
     _started: boolean,
