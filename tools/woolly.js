@@ -869,8 +869,9 @@ if (cmd === "create") {
   if (created.length > 0) openInEditor(created[0]);
 
   // Auto-regenerate mapping for this place
-  const gen = run("node", ["tools/genRojoTree.js", place]);
-  process.exit(gen.status);
+  let r = run("node", ["tools/genRojoTree.js", place]);
+  r = run("node", ["tools/genTypes.js", place]);
+  process.exit(r.status);
 }
 
 // Fallback
