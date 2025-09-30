@@ -44,8 +44,16 @@ to set up the project.
 
 To avoid typing `npx` before every command, run
 ```sh
-npm install -g .
+npm link
 ```
+and you should be able to run commands without `npx` like:
+```sh
+woolly setup
+woolly gen
+woolly build
+woolly serve
+```
+**Note** `npm link` might need to be run as an adminstrator, for example by `sudo npm link`.
 
 ---
 

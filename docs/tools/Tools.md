@@ -10,6 +10,8 @@ It covers setup, generating Rojo mappings, and creating new framework structures
 2. Clone this repo and run `npm install`
 3. Use commands with `npx woolly` (e.g. `npx woolly gen MainPlace`)
 
+To omit `npx`, use `npm link` (as administrator) to use `woolly ...` commands.
+
 ## 1. Project Setup
 
 Run the setup command after cloning the repository to install dependencies and generate initial project files.
