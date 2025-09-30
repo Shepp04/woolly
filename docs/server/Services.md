@@ -133,7 +133,7 @@ function Service:Destroy()
     self._inited = false
 end
 
-return Service
+return Service :: Service
 ```
 
 ---
