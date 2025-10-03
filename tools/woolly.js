@@ -582,6 +582,7 @@ function createSystem(name, parentAbsOrNull) {
   ensureDir(path.join(base, "shared/assets/ui"));
   ensureDir(path.join(base, "shared/assets/models"));
   ensureDir(path.join(base, "shared/classes"));
+  ensureDir(path.join(base, "shared/utils"));
   ensureDir(path.join(base, "shared/config"));
 
   // data types

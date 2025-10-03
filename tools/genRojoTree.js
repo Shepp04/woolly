@@ -246,8 +246,9 @@ mountExternalPackages(project.tree.ReplicatedStorage);
 
 // ====== Build: Shared (base + overlay) ======
 (function buildShared() {
-  overlaySection(sharedRoot, "Packages",     path.join(SRC_SHARED, "packages"),     path.join(OV_SHARED, "packages"));
-  overlaySection(sharedRoot, "GameData",     path.join(GD_ROOT, "resolver"),        path.join(OV_SHARED, "game_data_resolver"));
+  overlaySection(sharedRoot, "Packages",     path.join(SRC_SHARED, "packages"),      path.join(OV_SHARED, "packages"));
+  overlaySection(sharedRoot, "Utils",        path.join(SRC_SHARED, "utils"),         path.join(OV_SHARED, "utils"));
+  overlaySection(sharedRoot, "GameData",     path.join(GD_ROOT, "resolver"),         path.join(OV_SHARED, "game_data_resolver"));
   overlaySection(sharedRoot, "Types",        TYPES_ROOT,                             path.join(OV_SHARED, "types"));
   overlaySection(sharedRoot, "Config",       path.join(SRC_SHARED, "config"),        path.join(OV_SHARED, "config"));
   overlaySection(sharedRoot, "Monetisation", path.join(MON_ROOT, "resolver"),        path.join(OV_SHARED, "monetisation_resolver"));
@@ -367,12 +368,14 @@ mountExternalPackages(project.tree.ReplicatedStorage);
   overlaySection(serverRoot, "Packages",    path.join(SRC_SERVER, "packages"),    path.join(OV_SERVER, "packages"));
   overlaySection(serverRoot, "Classes",     path.join(SRC_SERVER, "classes"),     path.join(OV_SERVER, "classes"));
   overlaySection(sharedRoot, "Classes",     path.join(SRC_SHARED, "classes"),     path.join(OV_SHARED, "classes"));
+  overlaySection(sharedRoot, "Utils",       path.join(SRC_SHARED, "utils"),       path.join(OV_SHARED, "utils"));
 
   const clientControllers = ensureFolder(clientRoot, "Controllers");
   const clientComponents  = ensureFolder(clientRoot, "Components");
   const clientUtils       = ensureFolder(clientRoot, "Utils");
   const sharedClasses     = ensureFolder(sharedRoot, "Classes");
   const serverClasses     = ensureFolder(serverRoot, "Classes");
+  const sharedUtils       = ensureFolder(sharedRoot, "Utils");
 
   const assets = ensureFolder(sharedRoot, "Assets");
   const ui = ensureFolder(assets, "UI");
@@ -432,6 +435,7 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       mirrorAssets(models, path.join(shRoot, "assets", "models"));
       mergeSystemLeaf(ensureFolder(sharedRoot, "Config"), path.join(shRoot, "config"));
       mergeSystemLeaf(sharedClasses,                      path.join(shRoot, "classes"));
+      mergeSystemLeaf(sharedUtils,                       path.join(shRoot, "utils"));
     }
   }
 })();
