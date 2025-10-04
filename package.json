@@ -10,5 +10,5 @@
         "serve": "node tools/woolly.js serve",
         "build": "node tools/woolly.js build"
     },
-    "version": "1.0.0"
+    "version": "0.2.1"
 }
