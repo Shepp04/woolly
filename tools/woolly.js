@@ -13,6 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const cp  = require("child_process");
+const { get } = require("http");
 
 const REPO = path.join(__dirname, "..");
 const PLACES_DIR = REPO;
@@ -51,6 +52,66 @@ function placeProjectPath(place) {
 
 function resolvePlace(argMaybe) {
   return argMaybe || getDefaultPlace();
+}
+
+function listDirs(abs) {
+  if (!fs.existsSync(abs)) return [];
+  return fs.readdirSync(abs, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => path.join(abs, d.name));
+}
+
+function resolveModuleFile(absBaseDir, pasName) {
+  let p = path.join(absBaseDir, `${pasName}.luau`);
+  if (fs.existsSync(p)) return p;
+
+  p = path.join(absBaseDir, `${pasName}.lua`);
+  if (fs.existsSync(p)) return p;
+
+  p = path.join(absBaseDir, pasName, "init.luau");
+  if (fs.existsSync(p)) return p;
+
+  p = path.join(absBaseDir, pasName, "init.lua");
+  if (fs.existsSync(p)) return p;
+
+  return null;
+}
+
+function resolveOpenPath(kind, name, _place, opts = {}) {
+  const { atDirOpt, systemName, target, preferSrc, placeOpt } = opts;
+  const pasName = toPascal(name);
+
+  // If --at is used, respect it for non-system kinds
+  if (atDirOpt && kind !== "system") {
+    const abs = resolveModuleFile(path.resolve(REPO, atDirOpt), pasName);
+    return abs || path.join(path.resolve(REPO, atDirOpt), `${pasName}.luau`);
+  }
+
+  if (kind === "system") {
+    // If a specific system name was given, open that folder across roots; otherwise open src/_systems/<Name> or fall back to any override
+    if (systemName) {
+      const direct = [
+        path.join(SRC_DIR, "_systems", systemName),
+        ...(placeOpt ? [path.join(OVERRIDES_DIR, placeOpt, "_systems", systemName)]
+                    : listDirs(OVERRIDES_DIR).map(ov => path.join(ov, "_systems", systemName))),
+      ];
+      for (const d of direct) if (fs.existsSync(d) && fs.statSync(d).isDirectory()) return d;
+      return direct[0]; // best-effort path
+    }
+    return path.join(sourceRootFor(_place, preferSrc), "_systems"); // generic
+  }
+
+  // Build global search bases for this kind
+  const bases = searchBasesForKind(kind, { target, placeOpt });
+
+  // Try to resolve the module in order
+  for (const base of bases) {
+    const hit = resolveModuleFile(base, pasName);
+    if (hit) return hit;
+  }
+
+  // Nothing found; return the first “expected” path (so the caller can print a helpful message)
+  return bases.length ? path.join(bases[0], `${pasName}.luau`) : null;
 }
 
 function overridesRootFor(place) {
@@ -107,6 +168,48 @@ const writeIfMissing = (abs, content) => {
   console.log("✓ wrote  ", abs);
   return true;
 };
+
+function LU(name) {
+  return /\.lua(u)?$/i.test(name);
+}
+function isDir(p) { return fs.existsSync(p) && fs.statSync(p).isDirectory(); }
+function isFile(p){ return fs.existsSync(p) && fs.statSync(p).isFile(); }
+
+function listDirs(abs) {
+  if (!fs.existsSync(abs)) return [];
+  return fs.readdirSync(abs, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => path.join(abs, d.name));
+}
+
+// Return display names in a single directory for module-like entries:
+// - <Name>.luau / <Name>.lua  => "Name"
+// - <Name>/init.luau|lua      => "Name"
+// (Never returns "init")
+function enumerateDirModules(absDir) {
+  if (!isDir(absDir)) return [];
+  const names = new Set();
+
+  for (const ent of fs.readdirSync(absDir, { withFileTypes: true })) {
+    const full = path.join(absDir, ent.name);
+
+    if (ent.isDirectory()) {
+      const initLuau = path.join(full, "init.luau");
+      const initLua  = path.join(full, "init.lua");
+      if (isFile(initLuau) || isFile(initLua)) {
+        names.add(ent.name);
+      }
+      continue;
+    }
+
+    if (ent.isFile() && LU(ent.name)) {
+      const base = ent.name.replace(/\.(luau|lua)$/i, "");
+      if (base.toLowerCase() !== "init") names.add(base);
+    }
+  }
+
+  return [...names];
+}
 
 function ensurePlaceSkeleton(place) {
   const base = path.join(OVERRIDES_DIR, place);
@@ -582,6 +685,173 @@ function baseDirFor(kind, place, explicitAt, preferSrc = false) {
   }
 }
 
+function searchBasesForKind(kind, opts = {}) {
+  // opts: { target?, placeOpt?, preferSrc? }
+  const { target, placeOpt } = opts;
+
+  // Helper to map a root to a subpath by kind
+  const subpathsFor = (root, mode /* "plain" | "system" */) => {
+    const sysPrefix = mode === "system" ? path.join(root, "_systems", "*") : root;
+
+    switch (kind) {
+      case "service":    return [path.join(sysPrefix, "server", "services"), path.join(root, "server", "services")];
+      case "controller": return [path.join(sysPrefix, "client", "controllers"), path.join(root, "client", "controllers")];
+      case "component":  return [path.join(sysPrefix, "client", "components"),  path.join(root, "client", "components")];
+      case "data_type":  return [path.join(sysPrefix, "data_types"), path.join(root, "_game_data", "source", "data_types")];
+      case "config":     return [path.join(sysPrefix, "shared", "config"),      path.join(root, "shared", "config")];
+      case "util":       return [path.join(sysPrefix, "shared", "utils"),       path.join(root, "shared", "utils")];
+
+      case "package": {
+        // target may be "shared" or "server"; if missing, we'll test both later
+        const shared = [path.join(sysPrefix, "shared", "packages"), path.join(root, "shared", "packages")];
+        const server = [path.join(sysPrefix, "server", "packages"), path.join(root, "server", "packages")];
+        if ((target || "").toLowerCase() === "server") return server;
+        if ((target || "").toLowerCase() === "shared") return shared;
+        return [...shared, ...server]; // try both when target not specified
+      }
+
+      case "class": {
+        // target may be "shared" or "server"; if missing, test shared then server
+        const shared = [path.join(sysPrefix, "shared", "classes"), path.join(root, "shared", "classes")];
+        const server = [path.join(sysPrefix, "server", "classes"), path.join(root, "server", "classes")];
+        if ((target || "").toLowerCase() === "server") return server;
+        if ((target || "").toLowerCase() === "shared") return shared;
+        return [...shared, ...server]; // try shared first, then server
+      }
+
+      default:
+        return [];
+    }
+  };
+
+  // Build override roots
+  let overrideRoots = [];
+  if (placeOpt) {
+    const one = path.join(OVERRIDES_DIR, placeOpt);
+    if (fs.existsSync(one) && fs.statSync(one).isDirectory()) overrideRoots = [one];
+  } else {
+    overrideRoots = listDirs(OVERRIDES_DIR);
+  }
+
+  // Expand “system” paths by globs: we’ll just replace the '*' manually
+  const expandSystems = (patterns) => {
+    const out = [];
+    for (const pat of patterns) {
+      const parts = pat.split(path.sep);
+      const starIdx = parts.indexOf("*");
+      if (starIdx === -1) {
+        out.push(pat);
+        continue;
+      }
+      const sysRoot = parts.slice(0, starIdx).join(path.sep);
+      const remainder = parts.slice(starIdx + 1).join(path.sep);
+      if (!fs.existsSync(sysRoot)) continue;
+      for (const sys of listDirs(sysRoot)) {
+        out.push(path.join(sys, remainder));
+      }
+    }
+    return out;
+  };
+
+  // Order:
+  // 1) place_overrides/*/_systems/*/<...>, then place_overrides/*/<...>
+  // 2) src/_systems/*/<...>, then src/<...>
+  const bases = [];
+
+  // overrides: system-first then plain
+  for (const ov of overrideRoots) {
+    bases.push(...expandSystems(subpathsFor(ov, "system")));
+  }
+  for (const ov of overrideRoots) {
+    bases.push(...subpathsFor(ov, "plain"));
+  }
+
+  // src: system-first then plain
+  bases.push(...expandSystems(subpathsFor(SRC_DIR, "system")));
+  bases.push(...subpathsFor(SRC_DIR, "plain"));
+
+  // Dedup & only keep existing dirs
+  const seen = new Set();
+  const existing = [];
+  for (const b of bases) {
+    const norm = path.normalize(b);
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    if (fs.existsSync(norm) && fs.statSync(norm).isDirectory()) existing.push(norm);
+  }
+  return existing;
+}
+
+// For kinds that split by target (class/package), we can pass target.
+// If target is omitted for class/package, we’ll aggregate shared+server and label them.
+function collectModulesForKind(kind, { placeOpt } = {}) {
+  const out = new Map(); // name -> Set<labels>  (labels used only for class/package sides)
+
+  const add = (name, label) => {
+    if (!out.has(name)) out.set(name, new Set());
+    if (label) out.get(name).add(label);
+  };
+
+  const pushFromBases = (bases, label) => {
+    for (const base of bases) {
+      if (!isDir(base)) continue;
+      for (const n of enumerateDirModules(base)) add(n, label);
+    }
+  };
+
+  if (kind === "system") {
+    // Systems are directories under _systems/
+    const sysNames = new Set();
+    // place_overrides/*/_systems/*
+    const ovRoots = placeOpt
+      ? [path.join(OVERRIDES_DIR, placeOpt)]
+      : listDirs(OVERRIDES_DIR);
+
+    for (const ov of ovRoots) {
+      const sysRoot = path.join(ov, "_systems");
+      if (!isDir(sysRoot)) continue;
+      for (const d of listDirs(sysRoot)) sysNames.add(path.basename(d));
+    }
+
+    // src/_systems/*
+    const srcSys = path.join(SRC_DIR, "_systems");
+    if (isDir(srcSys)) {
+      for (const d of listDirs(srcSys)) sysNames.add(path.basename(d));
+    }
+
+    return [...sysNames].sort();
+  }
+
+  if (kind === "class" || kind === "package") {
+    // Try shared then server when target not specified
+    const sharedBases = searchBasesForKind(kind, { target: "shared", placeOpt });
+    const serverBases = searchBasesForKind(kind, { target: "server", placeOpt });
+    pushFromBases(sharedBases, "shared");
+    pushFromBases(serverBases, "server");
+
+    // Return entries as "Name [shared]" / "Name [server]" if both present
+    const lines = [];
+    for (const [name, labels] of [...out.entries()].sort((a,b)=>a[0].localeCompare(b[0]))) {
+      if (labels.size === 0) {
+        lines.push(name);
+      } else if (labels.size === 1) {
+        lines.push(`${name} [${[...labels][0]}]`);
+      } else {
+        // both sides
+        lines.push(`${name} [shared]`);
+        lines.push(`${name} [server]`);
+      }
+    }
+    return lines;
+  }
+
+  // Simple kinds (service/controller/component/data_type/config/util)
+  const bases = searchBasesForKind(kind, { placeOpt });
+  pushFromBases(bases, null);
+
+  return [...out.keys()].sort();
+}
+
 // ----------------- creators (now place-aware) -----------------
 function createService(name, parentAbsOrNull) {
   const pas = toPascal(name);
@@ -621,9 +891,6 @@ function createSystem(name, parentAbsOrNull) {
   ensureDir(path.join(base, "shared/classes"));
   ensureDir(path.join(base, "shared/utils"));
   ensureDir(path.join(base, "shared/config"));
-
-  // data types
-  ensureDir(path.join(base, "data_types"));
 
   // monetisation
   const monetisationDir = path.join(base, "monetisation");
@@ -789,6 +1056,7 @@ Woolly CLI
   build [Place]           Build 'builds/<Place>.rbxl' for that place
   switch <Place>          Make <Place> the default place in .woollyrc.json
 
+  open        <kind> <Name> [--at <dir>] [--place <Place>] [--system <Sys>] [--target shared|server]
   create place       <Name>
   create service     <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
   create controller  <Name> [--at <dir>] [--place <Place>] [--system <Sys>]
@@ -901,6 +1169,70 @@ if (cmd === "build") {
   const out = path.join(REPO, "builds", `${place}.rbxlx`);
   const res = run("rojo", ["build", path.basename(project), "-o", path.relative(REPO, out)]);
   process.exit(res.status);
+}
+
+if (cmd === "open") {
+  const kind = sub;
+  const name = rawName;
+  if (!kind || !name) { usage(); process.exit(1); }
+
+  const atDirOpt = getFlag("--at");
+  const placeOpt = getFlag("--place");
+  const place = resolvePlace(placeOpt);
+  const preferSrc = !placeOpt;
+  const systemName = getFlag("--system");
+  const target = getFlag("--target");
+  const both = hasFlag("--both"); // tolerated for symmetry. Open shared if both
+
+  const abs = resolveOpenPath(kind, name, place, {
+    atDirOpt, systemName, target, both, preferSrc, placeOpt
+  });
+  if (!abs) {
+    console.error("Could not resolve path to open. For classes, pass --target shared|server.");
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(abs)) {
+    console.error("File does not exist:", path.relative(REPO, abs));
+    process.exit(1);
+  }
+
+  openInEditor(abs);
+  process.exit(0);
+}
+
+if (cmd === "list") {
+  const kindArg = sub; // optional
+  const placeOpt = getFlag("--place"); // you can let users filter to a single place override if they want
+
+  const supported = [
+    "service","controller","component","class","data_type","package","util","config","system"
+  ];
+
+  const showOne = (kind) => {
+    const items = collectModulesForKind(kind, { placeOpt });
+    console.log(`\n${kind.toUpperCase()}:`);
+    if (!items.length) {
+      console.log("  (none)");
+      return;
+    }
+    for (const n of items) console.log("  - " + n);
+  };
+
+  if (kindArg) {
+    if (!supported.includes(kindArg)) {
+      console.error("Unknown kind:", kindArg);
+      console.error("Supported kinds:", supported.join(", "));
+      process.exit(1);
+    }
+    showOne(kindArg);
+    process.exit(0);
+  }
+
+  // No kind => list all, grouped by kind
+  for (const k of supported) showOne(k);
+  console.log(); // trailing newline
+  process.exit(0);
 }
 
 if (cmd === "create") {
