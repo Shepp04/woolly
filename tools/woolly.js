@@ -521,6 +521,39 @@ return ${Name} :: ${Name}API
 `;
 }
 
+function tmplPackage(Name) { 
+  return `--!strict
+-- ${Name} (Package)
+export type ${Name}API = {}
+
+local ${Name} = {}
+
+return {} :: ${Name}API
+`;
+}
+
+function tmplConfig(Name) { 
+  return `--!strict
+-- ${Name} (Config)
+export type ${Name} = {}
+
+local ${Name} = {}
+
+return {} :: ${Name}
+`;
+}
+
+function tmplUtil(Name) { 
+  return `--!strict
+-- ${Name} (Util)
+export type ${Name} = {}
+
+local ${Name} = {}
+
+return {} :: ${Name}
+`;
+}
+
 // ----------------- default dirs + place-aware roots -----------------
 const CLASS_DIRS = {
   shared: "src/shared/classes",
@@ -534,13 +567,17 @@ function baseDirFor(kind, place, explicitAt, preferSrc = false) {
   // Otherwise use place-specific root if it exists, else src.
   const root = sourceRootFor(place, preferSrc);
   switch (kind) {
-    case "service":    return path.join(root, "server/services");
-    case "controller": return path.join(root, "client/controllers");
-    case "component":  return path.join(root, "client/components");
-    case "system":     return path.join(root, "_systems");
-    case "data_type":  return path.join(root, "_game_data/source/data_types");
-    case "class_shared": return path.join(root, "shared/classes");
-    case "class_server": return path.join(root, "server/classes");
+    case "service":         return path.join(root, "server/services");
+    case "controller":      return path.join(root, "client/controllers");
+    case "component":       return path.join(root, "client/components");
+    case "system":          return path.join(root, "_systems");
+    case "data_type":       return path.join(root, "_game_data/source/data_types");
+    case "class_shared":    return path.join(root, "shared/classes");
+    case "class_server":    return path.join(root, "server/classes");
+    case "package_server":  return path.join(root, "server/packages");
+    case "package_shared":  return path.join(root, "shared/packages");
+    case "config":          return path.join(root, "shared/config");
+    case "util":            return path.join(root, "shared/utils");
     default: return root;
   }
 }
@@ -670,6 +707,31 @@ function createServerClass(rawName, parentAbs) {
   return abs;
 }
 
+function createSharedPackage(rawName, parentAbsOrNull) {
+  const pas = toPascal(rawName);
+  const file = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(file, tmplPackage(pas)) ? [file] : [];
+}
+
+function createServerPackage(rawName, parentAbsOrNull) {
+  const pas = toPascal(rawName);
+  const file = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(file, tmplPackage(pas)) ? [file] : [];
+}
+
+function createConfig(rawName, parentAbsOrNull) {
+  const pas = toPascal(rawName);
+
+  const abs = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(abs, tmplConfig(pas)) ? [abs] : [];
+}
+
+function createUtil(rawName, parentAbsOrNull) {
+  const pas = toPascal(rawName);
+  const abs = path.resolve(parentAbsOrNull, `${pas}.luau`);
+  return writeIfMissing(abs, tmplUtil(pas)) ? [abs] : [];
+}
+
 function createPlace(name) {
   const pas = name; // keep user casing
   const base = path.resolve("place_overrides", pas);
@@ -679,7 +741,8 @@ function createPlace(name) {
   ensureDir(path.join(base, "shared/assets/models"));
   ensureDir(path.join(base, "shared/classes"));
   ensureDir(path.join(base, "shared/config"));
-  ensureDir(path.join(base, "shared/packages")); // optional, in case you override shared packages/resolver
+  ensureDir(path.join(base, "shared/packages"));
+  ensureDir(path.join(base, "shared/utils"));
 
   // client
   ensureDir(path.join(base, "client/controllers"));
@@ -971,6 +1034,69 @@ if (cmd === "create") {
         if (p) made.push(p);
       }
       created = made;
+      break;
+    }
+    case "package": {
+      // default roots for classes (place-aware)
+      const sharedRoot = atDirOpt ? path.resolve(REPO, atDirOpt) :
+        (systemName
+          ? path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "shared/packages")
+          : baseDirFor("package_shared", place, null, preferSrc));
+
+      const serverRoot = atDirOpt ? path.resolve(REPO, atDirOpt) :
+        (systemName
+          ? path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "server/packages")
+          : baseDirFor("package_server", place, null, preferSrc));
+
+      const made = [];
+
+      if (!both && target !== "shared" && target !== "server") {
+        console.error("Please specify --target shared|server or use --both");
+        process.exit(1);
+      }
+      if (both || target === "shared") {
+        ensureDir(sharedRoot);
+        const p = createSharedPackage(name, sharedRoot);
+        if (p) made.push(p);
+      }
+      if (both || target === "server") {
+        ensureDir(serverRoot);
+        const p = createServerPackage(name, serverRoot);
+        if (p) made.push(p);
+      }
+      created = made;
+      break;
+    }
+    case "config": {
+      if (atDirOpt) {
+        // --at always wins
+        baseAbs = path.resolve(REPO, atDirOpt);
+      } else if (systemName) {
+        // If a system is specified, target its client/components folder
+        baseAbs = path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "shared", "config");
+      } else {
+        // Fall back to global game data folder
+        baseAbs = baseDirFor("config", place, null, preferSrc);
+      }
+
+      // baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("component", place, null);
+      created = createConfig(name, baseAbs);
+      break;
+    }
+    case "util": {
+      if (atDirOpt) {
+        // --at always wins
+        baseAbs = path.resolve(REPO, atDirOpt);
+      } else if (systemName) {
+        // If a system is specified, target its client/components folder
+        baseAbs = path.join(sourceRootFor(place, preferSrc), "_systems", systemName, "shared", "utils");
+      } else {
+        // Fall back to global game data folder
+        baseAbs = baseDirFor("util", place, null, preferSrc);
+      }
+
+      // baseAbs = atDirOpt ? path.resolve(REPO, atDirOpt) : baseDirFor("component", place, null);
+      created = createUtil(name, baseAbs);
       break;
     }
     default:
