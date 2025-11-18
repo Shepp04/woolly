@@ -31,7 +31,7 @@ local PlayerService = {
     _inited = false,
     _started = false,
     _conns = {},
-    Priority = 99, -- start last
+    Priority = 0, -- start first
     Services = nil :: any -- auto-filled by bootstrapper
 }
 
@@ -51,7 +51,7 @@ function PlayerService:TeleportPlayers(players: { Player }, cf: CFrame, offset: 
 				self._transitionRemote:FireClient(plr)
 				task.wait(1)
 			end
-            
+
 			if offset then
 				local x = math.random(-offset, offset)
 				local z = math.random(-offset, offset)
