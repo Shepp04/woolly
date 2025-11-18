@@ -21,6 +21,7 @@ export type PlayerServiceAPI = {
     _conns: { RBXScriptConnection },
     _playerConns: { [Player]: { RBXScriptConnection } },
 
+    TeleportPlayers: (self: PlayerServiceAPI, players: { Player }, cf: CFrame, offset: number?, transition: boolean?) -> (),
     Init: (self: PlayerServiceAPI, deps: Deps) -> (),
     Start: (self: PlayerServiceAPI) -> (),
     Destroy: (self: PlayerServiceAPI) -> (),
@@ -39,7 +40,32 @@ local _deps: Deps?
 
 -- ========== Public API ========== --
 
+function PlayerService:TeleportPlayers(players: { Player }, cf: CFrame, offset: number?, transition: boolean?)
+	for _, plr in (players or Players:GetPlayers()) do
+		task.spawn(function()
+			local char = plr.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if not root then return end
+
+			if transition then
+				self._transitionRemote:FireClient(plr)
+				task.wait(1)
+			end
+            
+			if offset then
+				local x = math.random(-offset, offset)
+				local z = math.random(-offset, offset)
+
+				root.CFrame = cf * CFrame.new(Vector3.new(x, 0, z))
+			else
+				root.CFrame = cf
+			end
+		end)
+	end
+end
+
 -- ========== Internal ========== --
+
 function PlayerService:_onCharacterAdded(player: Player, char: Model)
     -- Get their humanoid
     local human = char:WaitForChild("Humanoid") :: Humanoid
@@ -114,19 +140,11 @@ function PlayerService:Init(deps: Deps)
     self._conns = {}
     self._playerConns = {}
 
-    -- Register player-player collision group
-    local playerCollisionsEnabled = PlayersConfig and PlayersConfig.playerCollisionsEnabled
-    if not PhysicsService:IsCollisionGroupRegistered("Player") then
-        PhysicsService:RegisterCollisionGroup("Player")
-        PhysicsService:CollisionGroupSetCollidable("Player", "Player", playerCollisionsEnabled)
-    end
-end
-
-function PlayerService:Start()
-    if not self._inited or self._started then return end
-    self._started = true
-
     -- // Connect player life cycle events
+    -- // Important - define this in :Init() rather than :Start()
+    -- // to avoid other services e.g. CurrencyService yielding for data in :Start() as it could have
+    -- // been started before PlayerService
+
     for _, plr in Players:GetPlayers() do
         self:_onPlayerAdded(plr)
     end
@@ -136,6 +154,21 @@ function PlayerService:Start()
     table.insert(self._conns, Players.PlayerRemoving:Connect(function(...)
         self:_onPlayerRemove(...)
     end))
+
+    -- Register player-player collision group
+    local playerCollisionsEnabled = PlayersConfig and PlayersConfig.playerCollisionsEnabled
+    if not PhysicsService:IsCollisionGroupRegistered("Player") then
+        PhysicsService:RegisterCollisionGroup("Player")
+        PhysicsService:CollisionGroupSetCollidable("Player", "Player", playerCollisionsEnabled)
+    end
+
+    -- Create remotes
+	self._transitionRemote = _deps.SharedPackages.Remotes:GetRemote("RemoteEvent", "Transition") :: RemoteEvent
+end
+
+function PlayerService:Start()
+    if not self._inited or self._started then return end
+    self._started = true
 end
 
 function PlayerService:Destroy()
