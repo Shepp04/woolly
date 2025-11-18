@@ -358,8 +358,6 @@ mountExternalPackages(project.tree.ReplicatedStorage);
 
 // ====== Systems merge (applies to all places) ======
 (function mergeSystems() {
-  if (!isDir(SYS_ROOT)) return;
-
   // Ensure these nodes exist (respecting folder-back if base was mounted)
   overlaySection(clientRoot, "Controllers", path.join(SRC_CLIENT, "controllers"), path.join(OV_CLIENT, "controllers"));
   overlaySection(clientRoot, "Components",  path.join(SRC_CLIENT, "components"),  path.join(OV_CLIENT, "components"));
@@ -391,9 +389,9 @@ mountExternalPackages(project.tree.ReplicatedStorage);
   const BASE_DT_DIR = path.join(GD_ROOT, "source", "data_types");
   mergeDataTypes(dtFolder, BASE_DT_DIR);
 
-  for (const sysName of fs.readdirSync(SYS_ROOT)) {
-    const sysDir = path.join(SYS_ROOT, sysName);
-    if (!isDir(sysDir)) continue;
+  // Helper function to merge a single system directory
+  function mergeSystemDir(sysDir, sysName) {
+    if (!isDir(sysDir)) return;
 
     // client parts
     const cRoot = path.join(sysDir, "client");
@@ -436,6 +434,23 @@ mountExternalPackages(project.tree.ReplicatedStorage);
       mergeSystemLeaf(ensureFolder(sharedRoot, "Config"), path.join(shRoot, "config"));
       mergeSystemLeaf(sharedClasses,                      path.join(shRoot, "classes"));
       mergeSystemLeaf(sharedUtils,                       path.join(shRoot, "utils"));
+    }
+  }
+
+  // Merge base systems from src/_systems/*
+  if (isDir(SYS_ROOT)) {
+    for (const sysName of fs.readdirSync(SYS_ROOT)) {
+      const sysDir = path.join(SYS_ROOT, sysName);
+      mergeSystemDir(sysDir, sysName);
+    }
+  }
+
+  // Merge place-specific systems from place_overrides/<PLACE>/_systems/*
+  const PLACE_SYS_ROOT = path.join(OV_BASE, "_systems");
+  if (isDir(PLACE_SYS_ROOT)) {
+    for (const sysName of fs.readdirSync(PLACE_SYS_ROOT)) {
+      const sysDir = path.join(PLACE_SYS_ROOT, sysName);
+      mergeSystemDir(sysDir, sysName);
     }
   }
 })();
