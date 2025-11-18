@@ -60,7 +60,7 @@ local function createSoundFromInfo(info: SoundInfo): Sound
 end
 
 --- Creates a Sound from name or clones an instance
-local function cloneSound(sound: Sound | string): Sound?
+local function cloneSound(sound: Sound | string | number): Sound?
 	if typeof(sound) == "string" then
 		local soundInfo = SoundsConfig:Get(sound)
 		if not soundInfo then
@@ -70,33 +70,60 @@ local function cloneSound(sound: Sound | string): Sound?
 		return createSoundFromInfo(soundInfo)
 	elseif typeof(sound) == "Instance" and sound:IsA("Sound") then
 		return sound:Clone()
+	elseif typeof(sound) == "number" then
+		local soundInfo = {
+			id = "rbxassetid://" .. tostring(sound),
+			volume = 0.5,
+		}
+		return createSoundFromInfo(soundInfo)
 	end
 	return nil
 end
 
 --- Anchors and plays a sound at a given 3D position or BasePart
 local function play3DSound(sound: Sound, target: Vector3 | BasePart)
-	local part = typeof(target) == "Vector3" and Instance.new("Part") or target
+	-- If target is a Vector3, create a transient anchored part to host the sound
 	if typeof(target) == "Vector3" then
-		part.Position = target
+		local anchor = Instance.new("Part")
+		anchor.Position = target
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.Transparency = 1
+		anchor.Name = "_SoundAnchor"
+		anchor.Parent = workspace
+
+		sound.RollOffMaxDistance = sound.RollOffMaxDistance or 150
+		sound.RollOffMode = Enum.RollOffMode.Linear
+		sound.PlayOnRemove = true
+		sound.Parent = anchor
+		-- Destroying the anchor will trigger PlayOnRemove and clean up the instance
+		anchor:Destroy()
+		return
 	end
 
-	part.Anchored = true
-	part.CanCollide = false
-	part.Transparency = 1
-	part.Name = "_SoundAnchor"
-	part.Parent = workspace
+	-- If target is a BasePart, attach the sound to the part without modifying it
+	if typeof(target) == "Instance" and target:IsA("BasePart") then
+		local part = target :: BasePart
+		sound.RollOffMaxDistance = sound.RollOffMaxDistance or 150
+		sound.RollOffMode = Enum.RollOffMode.Linear
+		sound.PlayOnRemove = false
+		sound.Parent = part
+		sound:Play()
+		return
+	end
 
+	-- Fallback: treat as non-positional
 	sound.RollOffMaxDistance = sound.RollOffMaxDistance or 150
+	sound.RollOffMode = Enum.RollOffMode.Linear
 	sound.PlayOnRemove = true
-	sound.Parent = part
-	part:Destroy()
+	sound.Parent = workspace
+	sound:Destroy()
 end
 
 -- // Public API
 
 --- Plays a one-shot sound
-function SoundModule:PlaySound(sound: Sound | string, target: Vector3 | BasePart?, playerList: { Player }?)
+function SoundModule:PlaySound(sound: Sound | string | number, target: Vector3 | BasePart?, playerList: { Player }?)
 	if not sound then return end
 
 	if IS_SERVER then
