@@ -257,6 +257,7 @@ type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
 type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
 type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
 type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+type Tunables       = { [string]: any } -- external tunables, not synced by rojo
 
 export type Deps = {
 \tDataInterface: DataInterface,
@@ -264,6 +265,7 @@ export type Deps = {
 \tGameData: GameData,
 \tMonetisation: Monetisation,
 \tConfig: Config,
+\tTunables: Tunables,
 }
 
 export type ${Name}API = {
@@ -338,6 +340,7 @@ type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
 type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
 type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
 type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+type Tunables       = { [string]: any } -- external tunables, not synced by rojo
 
 export type Deps = {
 \tReplicatedData: ReplicatedData,
@@ -345,6 +348,7 @@ export type Deps = {
 \tGameData: GameData,
 \tMonetisation: Monetisation,
 \tConfig: Config,
+\tTunables: Tunables,
 }
 
 export type ${Name}API = {
@@ -489,6 +493,7 @@ type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
 type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
 type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
 type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+type Tunables       = { [string]: any } -- external tunables, not synced by rojo
 
 export type Deps = {
 \tReplicatedData: ReplicatedData,
@@ -496,6 +501,7 @@ export type Deps = {
 \tGameData: GameData,
 \tMonetisation: Monetisation,
 \tConfig: Config,
+\tTunables: Tunables,
 }
 
 export type Opts = {
@@ -570,6 +576,7 @@ type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
 type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
 type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
 type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+type Tunables       = { [string]: any } -- external tunables, not synced by rojo
 
 export type Deps = {
 \tReplicatedData: ReplicatedData,
@@ -578,6 +585,7 @@ export type Deps = {
 \tGameData: GameData,
 \tMonetisation: Monetisation,
 \tConfig: Config,
+\tTunables: Tunables,
 }
 
 export type Opts = {

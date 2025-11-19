@@ -15,12 +15,19 @@ local GameDataMaster = require(ServerScriptService.Server.GameDataMaster)
 GameDataMaster:Init()
 
 -- ========== Services ========== --
+
+-- // Show message if no Tunables found
+if not ReplicatedStorage:FindFirstChild("Tunables") then
+    warn("[Bootstrap] No Tunables module found in ReplicatedStorage. Using default values.")
+end
+
 local deps = {
     DataInterface = require(ServerScriptService.Server.Services.DataInterface),
     SharedPackages = require(ReplicatedStorage.Shared.Packages),
     GameData = require(ReplicatedStorage.Shared.GameData),
     Monetisation = require(ReplicatedStorage.Shared.Monetisation),
     Config = require(ReplicatedStorage.Shared.Config),
+    Tunables = ReplicatedStorage:FindFirstChild("Tunables") and require(ReplicatedStorage.Tunables) or {}, -- external tunables not synced by rojo
 }
 
 local Services = require(ServerScriptService.Server.Services)
