@@ -132,7 +132,7 @@ end
 --[[
     .Get(name: string)
     Typed accessor for a controller by module name
-    e.g local CurrencyService = Controllers:Get("CurrencyService")
+    e.g local CurrencyService = Controllers.Get("CurrencyService")
 ]]
 function API.Get<T>(name: string): T
 	local c = API._registry[name]
