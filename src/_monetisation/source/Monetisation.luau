@@ -9,12 +9,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- // Datastores
-local PurchaseHistoryStore
-if game.PlaceVersion ~= 0 then
-	PurchaseHistoryStore = DataStoreService:GetDataStore("PurchaseHistory")
-else
-	warn(`[MonetisationService] Please publish this place to use MonetisationService fully!`)
-end
+local PurchaseHistoryStore = DataStoreService:GetDataStore("PurchaseHistory")
 
 -- // Data (server-only SSOT)
 local ProductDefs = require(script.Aggregator)
@@ -22,11 +17,26 @@ local ProductDefs = require(script.Aggregator)
 -- // Packages (shared replication)
 local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
 
--- // Types
+-- // Types (generated)
+local ServicesTypes = require(ReplicatedStorage.Shared.Types.Services)
+
+-- // Type aliases for deps inferred from real modules
+type ServiceRegistry = ServicesTypes.Registry
+
+type DataInterface  = ServicesTypes.DataInterface
+type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
+type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
+type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
+type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+type Tunables       = { [string]: any } -- external tunables, not synced by rojo
+
 export type Deps = {
-	-- Optional facade for rewarding currency, etc.
-	DataInterface: any?,
-	ReplicatedData: any?,
+	DataInterface: DataInterface,
+	SharedPackages: SharedPackages,
+	GameData: GameData,
+	Monetisation: Monetisation,
+	Config: Config,
+	Tunables: Tunables,
 }
 
 export type ReceiptInfo = {
@@ -147,7 +157,7 @@ function MonetisationService:_processGamepass(player: Player, gamepassId: number
 
 	local handler = (passDef :: any).handler
 	if handler ~= nil then
-		local ok, err = pcall(handler, player, gamepassId)
+		local ok, err = pcall(handler, player, gamepassId, passDef.params, _deps)
 		if not ok then
 			warn(("[Monetisation] Gamepass handler error for id %d: %s"):format(gamepassId, tostring(err)))
 			return false
@@ -194,11 +204,9 @@ function MonetisationService:_processReceipt(receiptInfo: ReceiptInfo): Enum.Pro
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
-	-- Execute handler (adapt if your handlers expect params/DataInterface)
+	-- Execute handler
 	local okHandler, errHandler = pcall(function()
-		handler(player, prod.id)
-		-- Example if you want params/DI:
-		-- handler(player, prod.id, prod.params, _deps and _deps.DataInterface)
+		handler(player, prod.id, prod.params, _deps)
 	end)
 	if not okHandler then
 		warn("[Monetisation] Handler error:", errHandler)
