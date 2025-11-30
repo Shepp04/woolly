@@ -961,7 +961,7 @@ function createSystem(name, parentAbsOrNull) {
   const devProductsPath = path.join(monetisationDir, "DevProducts.luau");
   const gamepassesPath = path.join(monetisationDir, "Gamepasses.luau");
 
-  const tmplDevProducts = `--!strict
+  const tmplDevProducts = (Name) => `--!strict
 -- // Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -980,23 +980,25 @@ local Handlers: { [string]: Handler } = {
 }
 
 -- ========== Definitions ========== --
-local defs: { devProducts: { DevProductPrivate } } = {
+local defs: { devProducts: { [string]: DevProductPrivate } } = {
   devProducts = {
-		id = 123456789,
-	  name = "Example Name",
-    category = "Example Category",
-    description = nil, -- hydrated automatically
-    priceInRobux = nil, -- hydrated automatically
-    iconImageAssetId = nil, -- hydrated automatically
-    params = {  },
-    handler = Handlers["ExampleHandler"],
-	},
+    ["${Name}_DevProduct"] = {
+      id = 123456789,
+      name = "Example Name",
+      category = "Example Category",
+      description = nil, -- hydrated automatically
+      priceInRobux = nil, -- hydrated automatically
+      iconImageAssetId = nil, -- hydrated automatically
+      params = {  },
+      handler = Handlers["ExampleHandler"],
+    },
+  },
 }
 
 return defs
 `;
 
-  const tmplGamepasses = `--!strict
+  const tmplGamepasses = (Name) => `--!strict
 -- // Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -1015,24 +1017,26 @@ local Handlers: { [string]: Handler } = {
 }
 
 -- ========== Definitions ========== --
-local defs: { gamepasses: { GamepassPrivate } } = {
+local defs: { gamepasses: { [string]: GamepassPrivate } } = {
   gamepasses = {
-		id = 123456789,
-	  name = "Example Name",
-    category = "Example Category",
-    description = nil, -- hydrated automatically
-    priceInRobux = nil, -- hydrated automatically
-    iconImageAssetId = nil, -- hydrated automatically
-    params = {  },
-    handler = Handlers["ExampleHandler"],
+    ["${Name}_Gamepass"] = {
+      id = 123456789,
+      name = "Example Name",
+      category = "Example Category",
+      description = nil, -- hydrated automatically
+      priceInRobux = nil, -- hydrated automatically
+      iconImageAssetId = nil, -- hydrated automatically
+      params = {  },
+      handler = Handlers["ExampleHandler"],
+    },
   },
 }
 
 return defs
 `;
 
-  writeIfMissing(devProductsPath, tmplDevProducts);
-  writeIfMissing(gamepassesPath, tmplGamepasses);
+  writeIfMissing(devProductsPath, tmplDevProducts(sysName));
+  writeIfMissing(gamepassesPath, tmplGamepasses(sysName));
 
   console.log("✓ created system scaffold at", path.relative(process.cwd(), base));
   return [];
