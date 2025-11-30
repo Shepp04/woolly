@@ -142,7 +142,7 @@ function MonetisationService:GetCredits(player: Player, productId: number): numb
 		return 0
 	end
 
-	local profile = _deps.DataInterface:GetProfile(player)
+	local profile = _deps.DataInterface:GetPlayerProfile(player)
 	if not profile or not profile.Data then
 		return 0
 	end
@@ -163,7 +163,7 @@ function MonetisationService:GrantCredit(player: Player, productId: number): boo
 		return false
 	end
 
-	local profile = _deps.DataInterface:GetProfile(player)
+	local profile = _deps.DataInterface:GetPlayerProfile(player)
 	if not profile or not profile.Data then
 		warn("[Monetisation] Profile not available for", player.Name)
 		return false
@@ -189,7 +189,7 @@ function MonetisationService:ConsumeCredit(player: Player, productId: number): b
 		return false
 	end
 
-	local profile = _deps.DataInterface:GetProfile(player)
+	local profile = _deps.DataInterface:GetPlayerProfile(player)
 	if not profile or not profile.Data then
 		warn("[Monetisation] Profile not available for", player.Name)
 		return false
@@ -248,24 +248,24 @@ function MonetisationService:AttemptCreditPurchase(player: Player, productId: nu
 			print((`[Monetisation] Credit purchase failed for {player.Name}, product {prod.name} - handler returned false`))
 		end
 	end
-
+	
 	return success
 end
 
 --[[ Publish the catalog snapshot to ReplicatedData ]]
 function MonetisationService:Republish()
 	local snapshot = buildSnapshot()
-	if _deps and _deps.ReplicatedData then
-		if _deps.ReplicatedData.RegisterStatic then
-			_deps.ReplicatedData:RegisterStatic("MonetisationData", snapshot)
-			if _deps.ReplicatedData.UpdateStatic then
-				_deps.ReplicatedData:UpdateStatic("MonetisationData", snapshot)
+	if _deps and _deps.SharedPackages and _deps.SharedPackages.ReplicatedData then
+		if _deps.SharedPackages.ReplicatedData.RegisterStatic then
+			_deps.SharedPackages.ReplicatedData:RegisterStatic("MonetisationData", snapshot)
+			if _deps.SharedPackages.ReplicatedData.UpdateStatic then
+				_deps.SharedPackages.ReplicatedData:UpdateStatic("MonetisationData", snapshot)
 			else
-				_deps.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
+				_deps.SharedPackages.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
 			end
 		else
-			_deps.ReplicatedData:SetData("MonetisationData", snapshot)
-			_deps.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
+			_deps.SharedPackages.ReplicatedData:SetData("MonetisationData", snapshot)
+			_deps.SharedPackages.ReplicatedData:UpdateData("MonetisationData", snapshot, nil)
 		end
 	end
 end
@@ -411,9 +411,12 @@ function MonetisationService:Init(deps: Deps)
 
 	self._version = tostring(os.time()) -- swap to a content hash later if desired
 
+	-- Create remotes
+	self._creditPurchaseRemote = _deps.SharedPackages.Remotes:GetRemote("RemoteEvent", "MonetisationCreditPurchase") :: RemoteEvent
+
 	-- Register reconcile section for credits storage
 	if deps.DataInterface and deps.DataInterface.RegisterReconcileSection then
-		deps.DataInterface:RegisterReconcileSection("Data", "MonetsationCredits", {})
+		deps.DataInterface:RegisterReconcileSection("Data", "MonetisationCredits", {})
 	end
 
 	-- Build & publish the public catalog now
@@ -447,14 +450,9 @@ function MonetisationService:Start()
 	end
 
 	-- Handle credit-based purchase attempts from client
-	if _deps and _deps.SharedPackages and _deps.SharedPackages.Remotes then
-		local CreditPurchaseRemote = _deps.SharedPackages.Remotes:GetRemote("RemoteEvent", "MonetisationCreditPurchase") :: RemoteEvent
-		table.insert(self._conns,
-			CreditPurchaseRemote.OnServerEvent:Connect(function(player, productId)
-				self:_onCreditPurchaseRequested(player, productId)
-		end)
-		)
-	end
+	table.insert(self._conns, self._creditPurchaseRemote.OnServerEvent:Connect(function(...)
+		self:_onCreditPurchaseRequested(...)
+	end))
 end
 
 function MonetisationService:Destroy()

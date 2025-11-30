@@ -162,7 +162,7 @@ if RunService:IsClient() then
 
     -- Get credits for a product from replicated data
     function Resolver.GetCredits(productId: number): number
-        local credits = ReplicatedData:GetData("MonetisationCredits", true)
+        local credits = ReplicatedData:GetData("MonetisationCredits", false)
         if not credits or typeof(credits) ~= "table" then
             return 0
         end
@@ -195,13 +195,13 @@ if RunService:IsClient() then
 
         -- Request credit purchase from server
         CreditPurchaseRemote:FireServer(dev.id)
-        
+
         return true
     end
 
     -- Client-local prompt (UI action on client)
     -- If checkCredits is true (default) and credits exist for dev products, will attempt credit purchase instead
-    function Resolver.PromptSale(key: string | number, player: Player?, checkCredits: boolean?)
+    function Resolver.PromptSale(key: string | number, player: Player?, checkCredits: boolean?): boolean
         local plr = player or Players.LocalPlayer
         if not plr then return false end
 
@@ -218,7 +218,6 @@ if RunService:IsClient() then
                 local credits = Resolver.GetCredits(dev.id)
                 if credits > 0 then
                     -- Try to use a credit instead of prompting purchase
-                    print((`[Monetisation] Client has {credits} credit(s) for product {dev.id}, attempting credit purchase`))
                     return Resolver.UseCreditPurchase(dev.id)
                 end
             end
@@ -342,7 +341,6 @@ do
             local credits = Resolver.GetCredits(player, productId)
             if credits > 0 then
                 -- Try to use a credit instead of prompting purchase
-                print((`[Monetisation] {player.Name} has {credits} credit(s) for product {productId}, attempting credit purchase`))
                 local Services = ServerScriptService:WaitForChild("Server"):WaitForChild("Services")
                 local ServicesAPI = require(Services)
                 local MonetisationService = ServicesAPI.Get("Monetisation")
