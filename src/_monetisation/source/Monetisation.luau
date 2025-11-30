@@ -60,10 +60,16 @@ export type MonetisationService = {
 
 	Republish: (self: MonetisationService) -> (),
 
+	GetCredits: (self: MonetisationService, player: Player, productId: number) -> number,
+	GrantCredit: (self: MonetisationService, player: Player, productId: number) -> boolean,
+	ConsumeCredit: (self: MonetisationService, player: Player, productId: number) -> boolean,
+	AttemptCreditPurchase: (self: MonetisationService, player: Player, productId: number) -> boolean,
+
 	_processGamepass: (self: MonetisationService, player: Player, gamepassId: number) -> boolean,
 	_processReceipt: (self: MonetisationService, receiptInfo: ReceiptInfo) -> Enum.ProductPurchaseDecision,
 	_onCharacterAdded: (self: MonetisationService, player: Player, char: Model) -> (),
 	_onPlayerAdded: (self: MonetisationService, player: Player) -> (),
+	_onCreditPurchaseRequested: (self: MonetisationService, player: Player, productId: number) -> (),
 }
 
 local MonetisationService = {
@@ -125,6 +131,125 @@ local function buildSnapshot()
 	end
 
 	return snap
+end
+
+-- ========== Credit Management ========== --
+
+--[[ Get the number of credits a player has for a specific product ]]
+function MonetisationService:GetCredits(player: Player, productId: number): number
+	if not _deps or not _deps.DataInterface then
+		warn("[Monetisation] DataInterface not available")
+		return 0
+	end
+
+	local profile = _deps.DataInterface:GetProfile(player)
+	if not profile or not profile.Data then
+		return 0
+	end
+
+	local credits = profile.Data.MonetisationCredits
+	if not credits or typeof(credits) ~= "table" then
+		return 0
+	end
+
+	local productKey = tostring(productId)
+	return credits[productKey] or 0
+end
+
+--[[ Grant a credit to a player for a failed purchase ]]
+function MonetisationService:GrantCredit(player: Player, productId: number): boolean
+	if not _deps or not _deps.DataInterface then
+		warn("[Monetisation] DataInterface not available")
+		return false
+	end
+
+	local profile = _deps.DataInterface:GetProfile(player)
+	if not profile or not profile.Data then
+		warn("[Monetisation] Profile not available for", player.Name)
+		return false
+	end
+
+	local productKey = tostring(productId)
+	local credits = profile.Data.MonetisationCredits
+	if not credits or typeof(credits) ~= "table" then
+		profile.Data.MonetisationCredits = {}
+		credits = profile.Data.MonetisationCredits
+	end
+
+	credits[productKey] = (credits[productKey] or 0) + 1
+
+	print((`[Monetisation] Granted credit to {player.Name} for product {productId}`))
+	return true
+end
+
+--[[ Consume a credit for a product (returns true if credit was available and consumed) ]]
+function MonetisationService:ConsumeCredit(player: Player, productId: number): boolean
+	if not _deps or not _deps.DataInterface then
+		warn("[Monetisation] DataInterface not available")
+		return false
+	end
+
+	local profile = _deps.DataInterface:GetProfile(player)
+	if not profile or not profile.Data then
+		warn("[Monetisation] Profile not available for", player.Name)
+		return false
+	end
+
+	local productKey = tostring(productId)
+	local credits = profile.Data.MonetisationCredits
+	if not credits or typeof(credits) ~= "table" then
+		return false
+	end
+
+	local current = credits[productKey] or 0
+	if current <= 0 then
+		return false
+	end
+
+	credits[productKey] = current - 1
+
+	return true
+end
+
+--[[ Attempt to use a credit to execute a product handler ]]
+function MonetisationService:AttemptCreditPurchase(player: Player, productId: number): boolean
+	-- Find the product
+	local prod = ProductDefs.GetDevProductFromId(productId)
+	if not prod then
+		warn("[Monetisation] Unknown product id for credit purchase:", productId)
+		return false
+	end
+
+	local handler = (prod :: any).handler
+	if not handler then
+		warn((`[Monetisation] Product {prod.name} has no handler for credit purchase`))
+		return false
+	end
+
+	-- Execute handler
+	local success = false
+	local okHandler, result = pcall(function()
+		return handler(player, prod.id, prod.params, _deps)
+	end)
+
+	if okHandler and result == true then
+		-- Handler succeeded, consume the credit
+		if self:ConsumeCredit(player, productId) then
+			print((`[Monetisation] Credit purchase successful for {player.Name}, product {prod.name}`))
+			success = true
+		else
+			warn("[Monetisation] Handler succeeded but failed to consume credit")
+		end
+	else
+		-- Handler failed or returned false
+		if not okHandler then
+			warn("[Monetisation] Credit purchase handler error:", result)
+		else
+			print((`[Monetisation] Credit purchase failed for {player.Name}, product {prod.name} - handler returned false`))
+		end
+	end
+
+	return success
 end
 
 --[[ Publish the catalog snapshot to ReplicatedData ]]
@@ -205,12 +330,18 @@ function MonetisationService:_processReceipt(receiptInfo: ReceiptInfo): Enum.Pro
 	end
 
 	-- Execute handler
-	local okHandler, errHandler = pcall(function()
-		handler(player, prod.id, prod.params, _deps)
+	local okHandler, result = pcall(function()
+		return handler(player, prod.id, prod.params, _deps)
 	end)
 	if not okHandler then
-		warn("[Monetisation] Handler error:", errHandler)
+		warn("[Monetisation] Handler error:", result)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	-- If handler returned false, grant a credit for retry
+	if result == false then
+		print((`[Monetisation] Handler failed for {player.Name}, product {prod.name} - granting credit`))
+		self:GrantCredit(player, prod.id)
 	end
 
 	-- Record purchase (safe under concurrency)
@@ -250,6 +381,24 @@ function MonetisationService:_onPlayerAdded(player: Player)
 	end))
 end
 
+--[[ Handle credit purchase request from client ]]
+function MonetisationService:_onCreditPurchaseRequested(player: Player, productId: number)
+	if typeof(productId) ~= "number" then
+		warn("[Monetisation] Invalid productId in credit purchase request")
+		return
+	end
+
+	-- Check if player has credits
+	local credits = self:GetCredits(player, productId)
+	if credits <= 0 then
+		warn((`[Monetisation] {player.Name} attempted credit purchase with no credits for product {productId}`))
+		return
+	end
+
+	-- Attempt the credit purchase
+	self:AttemptCreditPurchase(player, productId)
+end
+
 -- ========== Life Cycle ========== --
 
 --[[ Init: capture deps and publish initial redacted catalog ]]
@@ -261,6 +410,11 @@ function MonetisationService:Init(deps: Deps)
 	self._conns = {}
 
 	self._version = tostring(os.time()) -- swap to a content hash later if desired
+
+	-- Register reconcile section for credits storage
+	if deps.DataInterface and deps.DataInterface.RegisterReconcileSection then
+		deps.DataInterface:RegisterReconcileSection("Data", "MonetsationCredits", {})
+	end
 
 	-- Build & publish the public catalog now
 	self:Republish()
@@ -291,9 +445,18 @@ function MonetisationService:Start()
 	MarketplaceService.ProcessReceipt = function(receiptInfo: ReceiptInfo)
 		return self:_processReceipt(receiptInfo)
 	end
+
+	-- Handle credit-based purchase attempts from client
+	if _deps and _deps.SharedPackages and _deps.SharedPackages.Remotes then
+		local CreditPurchaseRemote = _deps.SharedPackages.Remotes:GetRemote("RemoteEvent", "MonetisationCreditPurchase") :: RemoteEvent
+		table.insert(self._conns,
+			CreditPurchaseRemote.OnServerEvent:Connect(function(player, productId)
+				self:_onCreditPurchaseRequested(player, productId)
+		end)
+		)
+	end
 end
 
---[[ Teardown ]]
 function MonetisationService:Destroy()
 	for _, c in self._conns do
 		c:Disconnect()
