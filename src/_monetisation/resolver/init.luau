@@ -4,6 +4,7 @@
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
 -- Shared shapes (align with ProductDefs)
@@ -46,15 +47,17 @@ if RunService:IsClient() then
     local Packages = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"))
     local ReplicatedData = Packages.ReplicatedData
 
-    -- UI overlay (optional)
+    -- UI overlay
     local UIAssets = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Assets"):WaitForChild("UI")
     local MonetisationOverlay = UIAssets:FindFirstChild("MonetisationOverlay")
+    local MonetisationCreditGui = UIAssets:FindFirstChild("MonetisationCreditGui")
 
     local CATEGORY = "MonetisationData"
 
     local _data: SnapshotPublic = ReplicatedData:GetStatic(CATEGORY, true) or { devProducts = {}, gamepasses = {} }
     local _devById: { [number]: BasePublic } = {}
     local _gpById:  { [number]: BasePublic } = {}
+    local _currentCreditProduct: (string | number)? = nil
 
     local function reindex()
         table.clear(_devById); table.clear(_gpById)
@@ -101,6 +104,96 @@ if RunService:IsClient() then
                 end
                 overlay:Destroy()
             end)
+        end
+    end
+
+    -- Credit Gui helpers
+    local function hideCreditGui()
+        _currentCreditProduct = nil
+        
+        local plr = Players.LocalPlayer
+        local pg = plr and plr:FindFirstChild("PlayerGui")
+        local gui = pg and pg:FindFirstChild("MonetisationCreditGui")
+        if gui then
+            -- Tween out
+            local cg = gui:FindFirstChildWhichIsA("CanvasGroup")
+            if cg then
+                local tween = TweenService:Create(cg, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { GroupTransparency = 1 })
+                tween:Play()
+                task.spawn(function()
+                    tween.Completed:Wait()
+                    if gui and gui.Parent then
+                        gui:Destroy()
+                    end
+                end)
+            else
+                gui:Destroy()
+            end
+        end
+    end
+
+    local function showCreditGui(productKey: string | number, credits: number)
+        if not MonetisationCreditGui then return end
+        local plr = Players.LocalPlayer
+        local pg = plr and plr:FindFirstChild("PlayerGui")
+        if not pg then return end
+        local old = pg:FindFirstChild("MonetisationCreditGui")
+        if old then old:Destroy() end
+        
+        _currentCreditProduct = productKey
+        
+        local clone = MonetisationCreditGui:Clone()
+        clone.Enabled = true
+        clone.Parent = pg
+
+        -- Update description with credit count
+        local frame = clone:FindFirstChild("CanvasGroup") and clone.CanvasGroup:FindFirstChild("Frame")
+        if frame then
+            local desc = frame:FindFirstChild("Description")
+            if desc and desc:IsA("TextLabel") then
+                desc.Text = (`You have {credits} free credit{credits > 1 and "s" or ""} available. Would you like to use a credit instead?`)
+            end
+        end
+
+        -- Wire up buttons
+        local buttons = frame and frame:FindFirstChild("Buttons")
+        if buttons then
+            local useBtn = buttons:FindFirstChild("Use") and buttons.Use:FindFirstChild("Select")
+            local cancelBtn = buttons:FindFirstChild("Cancel") and buttons.Cancel:FindFirstChild("Select")
+            
+            if useBtn and useBtn:IsA("TextButton") then
+                useBtn.Activated:Connect(function()
+                    if _currentCreditProduct then
+                        Resolver.UseCreditPurchase(_currentCreditProduct)
+                        hideCreditGui()
+                    end
+                end)
+            end
+            
+            if cancelBtn and cancelBtn:IsA("TextButton") then
+                cancelBtn.Activated:Connect(function()
+                    hideCreditGui()
+                    -- Prompt normal purchase
+                    if _currentCreditProduct then
+                        Resolver.PromptSale(_currentCreditProduct, plr, false)
+                    end
+                end)
+            end
+        end
+
+        -- Tween in
+        local cg = clone:FindFirstChildWhichIsA("CanvasGroup")
+        if cg then
+            cg.GroupTransparency = 1
+            local tween = TweenService:Create(cg, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { GroupTransparency = 0 })
+            tween:Play()
+
+            local gradient = cg:FindFirstChild("Gradient") :: Frame
+            if gradient and gradient:IsA("Frame") then
+                gradient.BackgroundTransparency = 1
+                local gradTween = TweenService:Create(gradient, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { BackgroundTransparency = 0.45 })
+                gradTween:Play()
+            end
         end
     end
 
@@ -200,7 +293,7 @@ if RunService:IsClient() then
     end
 
     -- Client-local prompt (UI action on client)
-    -- If checkCredits is true (default) and credits exist for dev products, will attempt credit purchase instead
+    -- If checkCredits is true (default) and credits exist for dev products, will show credit GUI
     function Resolver.PromptSale(key: string | number, player: Player?, checkCredits: boolean?): boolean
         local plr = player or Players.LocalPlayer
         if not plr then return false end
@@ -217,8 +310,9 @@ if RunService:IsClient() then
             if checkCredits ~= false then
                 local credits = Resolver.GetCredits(dev.id)
                 if credits > 0 then
-                    -- Try to use a credit instead of prompting purchase
-                    return Resolver.UseCreditPurchase(dev.id)
+                    -- Show credit GUI to let user choose
+                    showCreditGui(key, credits)
+                    return true
                 end
             end
             
