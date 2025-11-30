@@ -1,29 +1,31 @@
 --!strict
 
---// Services
+-- // Services
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 
---// Constants
+-- // Constants
 local TAG = "BouncingButton"
-local APPLIED_TAG = TAG .. "_Applied"
 
---// Types
+-- // Types
 type GuiComponent = {
 	Create: (self: GuiComponent, button: Frame) -> (),
 	Init: (self: GuiComponent) -> (),
 }
 
---// Component
+-- // Component
 local GuiComponent = {} :: GuiComponent
+
+-- // Internal State
+local appliedInstances: { [Instance]: boolean } = {}
 
 -- ========== Public API ========== --
 function GuiComponent:Create(button: Frame): nil
 	-- Prevent re-application
-	if CollectionService:HasTag(button, APPLIED_TAG) then
+	if appliedInstances[button] then
 		return
 	end
-	CollectionService:AddTag(button, APPLIED_TAG)
+	appliedInstances[button] = true
 
 	local selectButton = button:FindFirstChild("Select")
 	if not selectButton or not selectButton:IsA("TextButton") then

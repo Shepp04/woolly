@@ -9,26 +9,27 @@ type GamepassPrivate = Types.GamepassPrivate
 
 -- ========== Handlers ========== --
 local Handlers: { [string]: Handler } = {
-    MultiplierGamepass = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
-        -- NOTE: Gamepasses are not fulfilled via receipts; handler can be used for side-effects elsewhere.
-        return true
-    end
+  ["ExampleHandler"] = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
+    -- Example handler
+    print("Player " .. player.Name .. " purchased gamepass " .. tostring(productId))
+    return true
+  end,
 }
 
 -- ========== Definitions ========== --
-local defs: { gamepasses: { GamepassPrivate } } = {
-    gamepasses = {
-        DoubleCurrency = {
-            id = 12345678,
-            name = "Double Currency",
-            category = "Multipliers",
-            description = nil,
-            priceInRobux = nil,
-            iconImageAssetId = nil,
-            handler = Handlers.MultiplierGamepass,
-            params = { value = 2, currencyId = "Cash" },
-        },
-    }
+local defs: { gamepasses: { [string]: GamepassPrivate } } = {
+  gamepasses = {
+    ["ExampleGamepass"] = {
+      id = 123456789,
+      name = "Example Name",
+      category = "Example Category",
+      description = nil, -- hydrated automatically
+      priceInRobux = nil, -- hydrated automatically
+      iconImageAssetId = nil, -- hydrated automatically
+      params = {  },
+      handler = Handlers["ExampleHandler"],
+    },
+  },
 }
 
 return defs

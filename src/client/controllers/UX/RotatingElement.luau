@@ -1,22 +1,24 @@
 --!strict
 
---// Services
+-- // Services
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 
---// Constants
+-- // Constants
 local TAG = "RotatingElement"
-local APPLIED_TAG = TAG .. "_Applied"
 
---// Types
+-- // Types
 type GuiComponent = {
 	Init: (self: GuiComponent) -> (),
 }
 
---// Component
+-- // Component
 local GuiComponent = {} :: GuiComponent
 
---// Render Update
+-- // Internal State
+local appliedInstances: { [Instance]: boolean } = {}
+
+-- // Render Update
 local function update()
 	local elements = CollectionService:GetTagged(TAG)
 	if #elements == 0 then return end
@@ -25,8 +27,8 @@ local function update()
 
 	for _, element in elements do
 		if not element:IsDescendantOf(game.Players) then continue end
-		if not CollectionService:HasTag(element, APPLIED_TAG) then
-			CollectionService:AddTag(element, APPLIED_TAG)
+		if not appliedInstances[element] then
+			appliedInstances[element] = true
 		end
 
 		local speed = element:GetAttribute("RotateSpeed") or 1

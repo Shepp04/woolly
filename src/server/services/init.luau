@@ -143,7 +143,7 @@ end
 --[[
     .Get(name: string)
     Typed accessor for a service by module name
-    e.g local CurrencyService = Services:Get("CurrencyService")
+    e.g local CurrencyService = Services.Get("CurrencyService")
 ]]
 function API.Get<T>(name: string): T
     local svc = API._registry[name]
