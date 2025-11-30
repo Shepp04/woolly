@@ -36,10 +36,7 @@ Services.StartAll()
 
 -- ========== Monetisation ========== --
 local Monetisation = require(ServerScriptService.Server.Monetisation)
-Monetisation:Init({
-    DataInterface = Services.Get("DataInterface"),
-    ReplicatedData = SharedPackages.ReplicatedData,
-})
+Monetisation:Init(deps)
 Monetisation:Start()
 
 -- ========== Init ========== --
