@@ -9,27 +9,27 @@ type Handler = Types.Handler
 
 -- ========== Handlers ========== --
 local Handlers: { [string]: Handler } = {
-    CurrencyDevProduct = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
-        -- TODO: Grant currency etc.
-        print("Granted")
-        return true
-    end,
+  ["ExampleHandler"] = function(player: Player, productId: number, params: { any }?, deps: { any }?): boolean
+    -- Example handler
+    print("Player " .. player.Name .. " purchased dev product " .. tostring(productId))
+    return true
+  end,
 }
 
 -- ========== Definitions ========== --
-local defs: { devProducts: { DevProductPrivate } } = {
-    devProducts = {
-        DevProduct01 = {
-            id = 1151725677,
-            name = "Dev Product 01",
-            category = "Currency",
-            description = nil, -- hydrated later
-            priceInRobux = nil, -- hydrated later
-            iconImageAssetId = nil, -- hydrated later
-            handler = Handlers.CurrencyDevProduct,
-            params = { value = 10, currencyId = "Cash" },
-        }
-	},
+local defs: { devProducts: { [string]: DevProductPrivate } } = {
+  devProducts = {
+    ["ExampleDevProduct"] = {
+      id = 3469084910,
+      name = "Example Name",
+      category = "Example Category",
+      description = nil, -- hydrated automatically
+      priceInRobux = nil, -- hydrated automatically
+      iconImageAssetId = nil, -- hydrated automatically
+      params = {  },
+      handler = Handlers["ExampleHandler"],
+    },
+  },
 }
 
 return defs
