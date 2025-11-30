@@ -406,23 +406,71 @@ return ${Name} :: ${Name}API
 `;
 
 const tmplComponent = (Name) => `--!strict
--- ${Name} (Component) — reusable client UI/gameplay piece (class-like).
+-- ${Name} (Component)
 
-export type ${Name} = {
-\t_inited: boolean,
-\tInit: (self: ${Name}) -> (),
-\tDestroy: (self: ${Name}) -> (),
+-- // Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+-- // Utils
+local GuiRefs = require(script.Parent.Parent.Utils.GuiRefs)
+
+-- // Custom types
+
+-- // Type aliases for deps inferred from real modules
+type ReplicatedData = typeof(require(ReplicatedStorage.Shared.Packages.ReplicatedData))
+type SharedPackages = typeof(require(ReplicatedStorage.Shared.Packages))
+type GameData       = typeof(require(ReplicatedStorage.Shared.GameData))
+type Monetisation   = typeof(require(ReplicatedStorage.Shared.Monetisation))
+type Config         = typeof(require(ReplicatedStorage.Shared.Config))
+type Tunables       = { [string]: any } -- external tunables, not synced by rojo
+
+export type Deps = {
+\tReplicatedData: ReplicatedData,
+\tSharedPackages: SharedPackages,
+\tGameData: GameData,
+\tMonetisation: Monetisation,
+\tConfig: Config,
+\tTunables: Tunables,
 }
+
+export type ${Name}API = {
+\t_inited: boolean,
+\t_conns: { RBXScriptConnection },
+
+\tInit: (self: ${Name}API) -> (),
+\tDestroy: (self: ${Name}API) -> (),
+}
+
+export type Opts = {}
 
 local ${Name} = {}
 ${Name}.__index = ${Name}
 
+-- // Internal state
+local _deps: Deps? = nil
+
 -- ========== Constructor ========== --
 
-function ${Name}.new(...)
-\tlocal self = setmetatable({ _inited = false }, ${Name})
-\t-- capture args
+function ${Name}.new(deps: Deps, opts: Opts): ${Name}API
+\tif not _deps then
+\t\t_deps = deps
+\tend
+
+\tlocal self = setmetatable({ _inited = false, _conns = {} } :: any, ${Name}) :: ${Name}API
 \treturn self
+end
+
+-- ========== Public API ========== --
+
+function ${Name}:PublicMethod()
+\t-- Example
+end
+
+-- ========== Internal ========== --
+
+function ${Name}:_internalMethod()
+\t-- Example
 end
 
 -- ========== Life Cycle ========== --
@@ -430,14 +478,20 @@ end
 function ${Name}:Init()
 \tif self._inited then return end
 \tself._inited = true
-\t-- bind signals
+
+\t-- // Bind signals, initialise state etc.
 end
 
 function ${Name}:Destroy()
-\t-- cleanup
+\t-- Cleanup
+\tfor _, c in pairs(self._conns) do
+\t\tc:Disconnect()
+\tend
+\ttable.clear(self._conns)
+\tself._inited = false
 end
 
-return ${Name}
+return ${Name} :: ${Name}API
 `;
 
 const tmplDataType = (Name) => `--!strict
@@ -639,29 +693,29 @@ export type ${Name}API = {}
 
 local ${Name} = {}
 
-return {} :: ${Name}API
+return ${Name} :: ${Name}API
 `;
 }
 
 function tmplConfig(Name) { 
   return `--!strict
 -- ${Name} (Config)
-export type ${Name} = {}
+export type ${Name}API = {}
 
 local ${Name} = {}
 
-return {} :: ${Name}
+return ${Name} :: ${Name}API
 `;
 }
 
 function tmplUtil(Name) { 
   return `--!strict
 -- ${Name} (Util)
-export type ${Name} = {}
+export type ${Name}API = {}
 
 local ${Name} = {}
 
-return {} :: ${Name}
+return ${Name} :: ${Name}API
 `;
 }
 
