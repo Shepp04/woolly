@@ -5,7 +5,6 @@ local CollectionService = game:GetService("CollectionService")
 
 -- // Constants
 local TAG = "ExpandingButton"
-local APPLIED_TAG = TAG .. "_Applied"
 
 -- // Types
 export type GuiComponent = {
@@ -16,13 +15,16 @@ export type GuiComponent = {
 -- // Component
 local GuiComponent = {} :: GuiComponent
 
+-- // Internal State
+local appliedInstances: { [Instance]: boolean } = {}
+
 -- ========== Public API ========== --
 function GuiComponent:Create(button: Frame)
 	-- Prevent re-application
-	if CollectionService:HasTag(button, APPLIED_TAG) then
+	if appliedInstances[button] then
 		return
 	end
-	CollectionService:AddTag(button, APPLIED_TAG)
+	appliedInstances[button] = true
 
 	local selectButton = button:FindFirstChild("Select")
 	if not selectButton or not selectButton:IsA("TextButton") then

@@ -6,7 +6,6 @@ local RunService = game:GetService("RunService")
 
 -- // Constants
 local TAG = "ColourChangingElement"
-local APPLIED_TAG = TAG .. "_Applied"
 
 -- // Types
 type GuiComponent = {
@@ -46,17 +45,20 @@ GuiComponent.ColourSets = {
 	},
 }
 
+-- // Internal State
+local appliedInstances: { [Instance]: boolean } = {}
+
 -- // Render Update
 local function update()
 	local elements = CollectionService:GetTagged(TAG)
 	if #elements == 0 then return end
 
 	local t = tick()
-
+	
 	for _, element in elements do
 		if not element:IsDescendantOf(game.Players) then continue end
-		if not CollectionService:HasTag(element, APPLIED_TAG) then
-			CollectionService:AddTag(element, APPLIED_TAG)
+		if not appliedInstances[element] then
+			appliedInstances[element] = true
 		end
 
 		local colourSetId = element:GetAttribute("ColourSet") or "Default"
