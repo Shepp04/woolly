@@ -179,6 +179,12 @@ function MonetisationService:GrantCredit(player: Player, productId: number): boo
 	credits[productKey] = (credits[productKey] or 0) + 1
 
 	print((`[Monetisation] Granted credit to {player.Name} for product {productId}`))
+
+	-- Show the client a message
+	if _deps.SharedPackages.Messages then
+		_deps.SharedPackages.Messages:ShowMessage(player, "Purchase Failed: Free Credit Granted - try again!", "Error")
+	end
+
 	return true
 end
 
