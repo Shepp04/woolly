@@ -1,0 +1,11 @@
+# Project place file
+/woolly.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# External Packages
+Packages/
+
+wally.lock

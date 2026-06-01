@@ -1,0 +1,10 @@
+[package]
+name = "shepp/woolly"
+description = "Roblox game production kit"
+version = "0.1.0"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+private = true
+
+[dependencies]
+DataService = "leifstout/dataservice@1.0.0"
