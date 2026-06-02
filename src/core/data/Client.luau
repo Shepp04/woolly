@@ -86,4 +86,6 @@ function PlayerDataClient:WaitForData(): ()
 	RawClient:waitForData()
 end
 
+export type PlayerDataClient = typeof(PlayerDataClient)
+
 return PlayerDataClient

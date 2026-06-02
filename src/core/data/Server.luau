@@ -4,6 +4,9 @@
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+-- // Types
+local Types = require(ReplicatedStorage.Shared.Core.Types)
+
 -- DataService is mapped into ReplicatedStorage, but its server branch cannot be
 -- used by clients. Returning an empty typed table keeps shared requires safe.
 if RunService:IsClient() then
@@ -19,13 +22,7 @@ export type Path = string | { string }
 export type Schema = { [string]: any }
 export type MessagePayload = { [any]: any }
 export type LeaderstatValueType = "IntValue" | "NumberValue" | "StringValue"
-export type LeaderstatDefinition = {
-	Name: string,
-	Path: Path,
-	ValueType: LeaderstatValueType?,
-	IsPrimary: boolean?,
-	Priority: number?,
-}
+export type LeaderstatDefinition = Types.Leaderstat & { Priority: number? }
 export type InitOptions = {
 	useMock: boolean?,
 	viewedUserId: number?,
@@ -198,11 +195,11 @@ local function setupLeaderstats(player: Player, data: any): ()
 			`Player "{player.Name}" already has a leaderstat named "{definition.Name}"`
 		)
 
-		local leaderstat = createLeaderstat(definition, getValueAtPath(data, definition.Path))
+		local leaderstat = createLeaderstat(definition, getValueAtPath(data, definition.DataPath))
 		local rawLeaderstat = leaderstat :: any
 		rawLeaderstat.Parent = leaderstats
 
-		local connection = RawServer:getChangedSignal(player, definition.Path):Connect(function(value)
+		local connection = RawServer:getChangedSignal(player, definition.DataPath):Connect(function(value)
 			setLeaderstatValue(definition, leaderstat, value)
 		end)
 		table.insert(connections, connection)
@@ -211,7 +208,7 @@ end
 
 local function validateLeaderstats(schema: Schema): ()
 	for _, definition in leaderstatDefinitions do
-		local value = getValueAtPath(schema, definition.Path)
+		local value = getValueAtPath(schema, definition.DataPath)
 		assert(value ~= nil, `Leaderstat "{definition.Name}" points to a missing PlayerData schema value`)
 		validateLeaderstatValue(definition, value)
 	end
@@ -234,7 +231,7 @@ function PlayerDataServer:RegisterLeaderstat(definition: LeaderstatDefinition): 
 	assert(not initialised, "Cannot register PlayerData leaderstats after initialisation")
 	assert(definition.Name ~= "", "Leaderstat names cannot be empty")
 	assert(not leaderstatNames[definition.Name], `Leaderstat "{definition.Name}" is already registered`)
-	validatePath(definition.Path)
+	validatePath(definition.DataPath)
 
 	local valueType = definition.ValueType or "IntValue"
 	assert(
@@ -253,7 +250,7 @@ function PlayerDataServer:RegisterLeaderstat(definition: LeaderstatDefinition): 
 	leaderstatNames[definition.Name] = true
 	table.insert(leaderstatDefinitions, {
 		Name = definition.Name,
-		Path = deepCopy(definition.Path),
+		DataPath = deepCopy(definition.DataPath),
 		ValueType = valueType,
 		IsPrimary = definition.IsPrimary,
 		Priority = definition.Priority,
@@ -357,5 +354,7 @@ RawServer.onPlayerInit = function(_self, player: Player, data: any)
 
 	setupLeaderstats(player, data)
 end
+
+export type PlayerDataServer = typeof(PlayerDataServer)
 
 return PlayerDataServer
